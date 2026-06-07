@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Whisper</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>Whisper</h1>
+          <p>Desktop recorder and transcriber. v0.1.18</p>
+        </div>
+        <button id="settingsButton" class="ghost-button" type="button">Settings</button>
+      </header>
+
+      <section id="settingsPanel" class="settings-panel hidden">
+        <div class="setting-row">
+          <label for="apiKeyInput">API key</label>
+          <div class="input-row">
+            <input id="apiKeyInput" type="password" autocomplete="off" placeholder="OpenAI API key">
+            <button id="saveApiKeyButton" type="button">Save</button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label>Save folder</label>
+          <div class="folder-row">
+            <div id="saveRootText" class="folder-path">Loading...</div>
+            <button id="chooseFolderButton" type="button">Choose</button>
+            <button id="openFolderButton" type="button">Open</button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label for="engineSelect">Transcription engine</label>
+          <div class="input-row">
+            <select id="engineSelect">
+              <option value="openai">OpenAI API</option>
+              <option value="mlx">Local MLX Whisper</option>
+            </select>
+            <button id="saveEngineButton" type="button">Save</button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <label for="mlxModelInput">MLX model</label>
+          <input id="mlxModelInput" type="text" autocomplete="off" placeholder="mlx-community/whisper-large-v3-turbo">
+        </div>
+        <div class="setting-row">
+          <label>Local MLX files</label>
+          <div class="folder-row local-engine-row">
+            <div id="localEngineText" class="folder-path">Checking...</div>
+            <button id="installLocalEngineButton" type="button">Install</button>
+            <button id="removeLocalEngineButton" class="secondary danger-button" type="button">Remove</button>
+            <button id="openLocalEngineButton" type="button">Open</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <article class="input-panel">
+          <div class="meter" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <h2>Record</h2>
+          <button id="recordButton" class="record-button" type="button">
+            <span id="recordLabel">Start Talking</span>
+          </button>
+          <div class="status-slot">
+            <div id="recordingTime" class="quiet">00:00</div>
+          </div>
+        </article>
+
+        <article id="dropZone" class="input-panel drop-zone">
+          <input id="fileInput" type="file" accept="audio/*,.m4a,.webm,.mp3,.wav,.mp4,.mpeg,.mpga,.ogg,.flac">
+          <div class="file-mark" aria-hidden="true"></div>
+          <h2>File</h2>
+          <button id="chooseFileButton" class="upload-button" type="button">Choose Audio</button>
+          <div class="status-slot file-status">
+            <div id="fileName" class="quiet">No file selected</div>
+            <div class="quiet">Drop audio here</div>
+          </div>
+        </article>
+      </section>
+
+      <section class="result-panel">
+        <div class="result-head">
+          <h2>Transcript</h2>
+          <div class="actions">
+            <button id="transcribeButton" class="primary-action" type="button" disabled>Transcribe</button>
+            <button id="saveButton" class="secondary" type="button" disabled>Save</button>
+            <button id="openSavedButton" class="secondary" type="button" disabled>Open</button>
+            <button id="copyButton" class="secondary" type="button" disabled>Copy</button>
+          </div>
+        </div>
+        <textarea id="transcript" readonly spellcheck="false" placeholder="Your transcript will appear here."></textarea>
+        <div id="statusText" class="status-text">Ready</div>
+      </section>
+    </main>
+
+    <section id="nameDialog" class="modal-backdrop hidden" aria-label="Name file">
+      <div class="modal">
+        <h2 id="nameDialogTitle">Name file</h2>
+        <input id="nameInput" type="text" autocomplete="off">
+        <div id="saveOptions" class="save-options">
+          <label>
+            <input id="saveAudioOption" type="checkbox">
+            <span>Audio</span>
+          </label>
+          <label>
+            <input id="saveTranscriptOption" type="checkbox">
+            <span>Transcript</span>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button id="nameCancelButton" class="secondary" type="button">Cancel</button>
+          <button id="nameConfirmButton" class="primary-action" type="button">Save</button>
+        </div>
+      </div>
+    </section>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

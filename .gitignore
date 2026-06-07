@@ -1,0 +1,18 @@
+# API keys & secrets
+.openai_token
+.openrouter_token
+
+# User settings (contains local paths)
+.whisper_settings.json
+
+# Electron build artifacts & dependencies
+node_modules/
+dist/
+*.log
+
+# Python
+*.pyc
+__pycache__/
+
+# macOS
+.DS_Store
