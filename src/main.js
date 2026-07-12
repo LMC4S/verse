@@ -10,10 +10,47 @@ const DEFAULT_MODEL = "whisper-1";
 const DEFAULT_ENGINE = "openai";
 const DEFAULT_MLX_MODEL = "mlx-community/whisper-large-v3-turbo";
 
+const HISTORY_LIMIT = 200;
+
 let mainWindow;
 
 function settingsPath() {
   return path.join(app.getPath("userData"), "settings.json");
+}
+
+function historyPath() {
+  return path.join(app.getPath("userData"), "history.json");
+}
+
+async function loadHistory() {
+  try {
+    const raw = await fs.readFile(historyPath(), "utf8");
+    const entries = JSON.parse(raw);
+    return Array.isArray(entries) ? entries : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveHistory(entries) {
+  await fs.mkdir(path.dirname(historyPath()), { recursive: true });
+  await fs.writeFile(historyPath(), JSON.stringify(entries, null, 2) + "\n", "utf8");
+}
+
+async function addHistoryEntry({ text, source, engine }) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return null;
+  const entry = {
+    id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    text: trimmed,
+    source: String(source || ""),
+    engine: String(engine || ""),
+    createdAt: new Date().toISOString(),
+  };
+  const entries = await loadHistory();
+  entries.unshift(entry);
+  await saveHistory(entries.slice(0, HISTORY_LIMIT));
+  return entry;
 }
 
 function defaultSaveRoot() {
@@ -404,12 +441,7 @@ ipcMain.handle("open:revealPath", async (_event, filePath) => {
   return { ok: true };
 });
 
-ipcMain.handle("audio:transcribe", async (_event, audio) => {
-  const settings = await loadSettings();
-  if (settings.engine === "mlx") {
-    return transcribeWithMlx(audio, settings);
-  }
-
+async function transcribeWithOpenAi(audio, settings) {
   if (!settings.apiKey) throw new Error("Save an OpenAI API key first.");
 
   const buffer = audioBufferFromPayload(audio);
@@ -438,6 +470,36 @@ ipcMain.handle("audio:transcribe", async (_event, audio) => {
     text: result.text,
     usage: result.usage || null,
   };
+}
+
+ipcMain.handle("audio:transcribe", async (_event, audio) => {
+  const settings = await loadSettings();
+  const result =
+    settings.engine === "mlx"
+      ? await transcribeWithMlx(audio, settings)
+      : await transcribeWithOpenAi(audio, settings);
+  await addHistoryEntry({
+    text: result.text,
+    source: audio?.fileName || "recording",
+    engine: settings.engine,
+  }).catch(() => {});
+  return result;
+});
+
+ipcMain.handle("history:list", async () => {
+  return loadHistory();
+});
+
+ipcMain.handle("history:delete", async (_event, id) => {
+  const entries = await loadHistory();
+  const next = entries.filter((entry) => entry.id !== id);
+  await saveHistory(next);
+  return next;
+});
+
+ipcMain.handle("history:clear", async () => {
+  await saveHistory([]);
+  return [];
 });
 
 ipcMain.handle("audio:save", async (_event, { audio, name }) => {

@@ -26,6 +26,13 @@ const transcribeButton = document.querySelector("#transcribeButton");
 const saveButton = document.querySelector("#saveButton");
 const openSavedButton = document.querySelector("#openSavedButton");
 const copyButton = document.querySelector("#copyButton");
+const historyButton = document.querySelector("#historyButton");
+const historyDrawer = document.querySelector("#historyDrawer");
+const historyBackdrop = document.querySelector("#historyBackdrop");
+const historyList = document.querySelector("#historyList");
+const historyCount = document.querySelector("#historyCount");
+const clearHistoryButton = document.querySelector("#clearHistoryButton");
+const closeHistoryButton = document.querySelector("#closeHistoryButton");
 const nameDialog = document.querySelector("#nameDialog");
 const nameDialogTitle = document.querySelector("#nameDialogTitle");
 const nameInput = document.querySelector("#nameInput");
@@ -253,7 +260,10 @@ async function transcribeAudio() {
   try {
     const result = await window.whisper.transcribeAudio(currentAudio);
     transcript.value = result.text || "";
-    setStatus("Done.");
+    setStatus("Done. Saved to history.");
+    if (!historyDrawer.classList.contains("hidden")) {
+      await refreshHistory();
+    }
   } catch (error) {
     setStatus(error.message);
   } finally {
@@ -304,6 +314,176 @@ function stopRecording() {
     mediaRecorder.stop();
   }
 }
+
+function formatHistoryTime(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  const diffMs = now - date;
+  if (diffMs < 60_000) return "Just now";
+  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)} min ago`;
+  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (date.toDateString() === now.toDateString()) return `Today ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const day = date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+  return `${day} ${time}`;
+}
+
+function engineLabel(engine) {
+  if (engine === "mlx") return "MLX";
+  if (engine === "openai") return "OpenAI";
+  return "";
+}
+
+function historyItemElement(entry) {
+  const item = document.createElement("article");
+  item.className = "history-item";
+
+  const meta = document.createElement("div");
+  meta.className = "history-meta";
+  const time = document.createElement("span");
+  time.textContent = formatHistoryTime(entry.createdAt);
+  meta.appendChild(time);
+  const detail = document.createElement("span");
+  const badge = engineLabel(entry.engine);
+  detail.textContent = [badge, `${entry.text.length} chars`].filter(Boolean).join(" · ");
+  meta.appendChild(detail);
+
+  const text = document.createElement("div");
+  text.className = "history-text";
+  text.textContent = entry.text;
+  text.title = "Click to expand";
+  text.addEventListener("click", () => {
+    text.classList.toggle("expanded");
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "history-actions";
+
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", async () => {
+    try {
+      await window.whisper.copyText(entry.text);
+      copy.textContent = "Copied";
+      window.setTimeout(() => {
+        copy.textContent = "Copy";
+      }, 1200);
+    } catch (error) {
+      setStatus(error.message);
+    }
+  });
+
+  const use = document.createElement("button");
+  use.type = "button";
+  use.textContent = "Open";
+  use.addEventListener("click", () => {
+    transcript.value = entry.text;
+    setResultActions();
+    closeHistory();
+    setStatus("Loaded from history.");
+  });
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "danger-button";
+  remove.textContent = "Delete";
+  remove.addEventListener("click", async () => {
+    try {
+      renderHistory(await window.whisper.deleteHistoryEntry(entry.id));
+    } catch (error) {
+      setStatus(error.message);
+    }
+  });
+
+  actions.append(copy, use, remove);
+  item.append(meta, text, actions);
+  return item;
+}
+
+function renderHistory(entries) {
+  historyList.replaceChildren();
+  historyCount.textContent = `${entries.length} transcript${entries.length === 1 ? "" : "s"}`;
+  clearHistoryButton.disabled = entries.length === 0;
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "history-empty";
+    empty.textContent = "No transcriptions yet. Every transcript is saved here automatically.";
+    historyList.appendChild(empty);
+    return;
+  }
+  for (const entry of entries) {
+    historyList.appendChild(historyItemElement(entry));
+  }
+}
+
+async function refreshHistory() {
+  try {
+    renderHistory(await window.whisper.getHistory());
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function resetClearHistoryButton() {
+  clearHistoryButton.textContent = "Clear all";
+  clearHistoryButton.classList.remove("confirming");
+}
+
+async function openHistory() {
+  historyDrawer.classList.remove("hidden");
+  historyBackdrop.classList.remove("hidden");
+  resetClearHistoryButton();
+  await refreshHistory();
+  historyList.scrollTop = 0;
+}
+
+function closeHistory() {
+  historyDrawer.classList.add("hidden");
+  historyBackdrop.classList.add("hidden");
+  resetClearHistoryButton();
+}
+
+historyButton.addEventListener("click", () => {
+  if (historyDrawer.classList.contains("hidden")) {
+    openHistory();
+  } else {
+    closeHistory();
+  }
+});
+
+closeHistoryButton.addEventListener("click", closeHistory);
+historyBackdrop.addEventListener("click", closeHistory);
+
+clearHistoryButton.addEventListener("click", async () => {
+  if (!clearHistoryButton.classList.contains("confirming")) {
+    clearHistoryButton.textContent = "Sure? Click again";
+    clearHistoryButton.classList.add("confirming");
+    window.setTimeout(resetClearHistoryButton, 3000);
+    return;
+  }
+  resetClearHistoryButton();
+  try {
+    renderHistory(await window.whisper.clearHistory());
+    setStatus("History cleared.");
+  } catch (error) {
+    setStatus(error.message);
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !historyDrawer.classList.contains("hidden")) {
+    closeHistory();
+  }
+});
 
 settingsButton.addEventListener("click", () => {
   settingsPanel.classList.toggle("hidden");

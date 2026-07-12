@@ -11,7 +11,7 @@
       <header class="topbar">
         <div>
           <h1>Whisper</h1>
-          <p>Desktop recorder and transcriber. v0.1.18</p>
+          <p>Desktop recorder and transcriber. v0.1.19</p>
         </div>
         <button id="settingsButton" class="ghost-button" type="button">Settings</button>
       </header>
@@ -95,12 +95,28 @@
             <button id="saveButton" class="secondary" type="button" disabled>Save</button>
             <button id="openSavedButton" class="secondary" type="button" disabled>Open</button>
             <button id="copyButton" class="secondary" type="button" disabled>Copy</button>
+            <button id="historyButton" class="secondary" type="button">History</button>
           </div>
         </div>
         <textarea id="transcript" readonly spellcheck="false" placeholder="Your transcript will appear here."></textarea>
         <div id="statusText" class="status-text">Ready</div>
       </section>
     </main>
+
+    <div id="historyBackdrop" class="history-backdrop hidden"></div>
+    <aside id="historyDrawer" class="history-drawer hidden" aria-label="Transcribe history">
+      <div class="history-head">
+        <div>
+          <h2>History</h2>
+          <div id="historyCount" class="quiet">0 transcripts</div>
+        </div>
+        <div class="history-head-actions">
+          <button id="clearHistoryButton" class="secondary danger-button" type="button">Clear all</button>
+          <button id="closeHistoryButton" class="secondary" type="button">Close</button>
+        </div>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </aside>
 
     <section id="nameDialog" class="modal-backdrop hidden" aria-label="Name file">
       <div class="modal">

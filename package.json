@@ -1,6 +1,6 @@
 {
   "name": "whisper-electron",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "A small desktop Whisper transcription app.",
   "main": "src/main.js",
   "private": true,

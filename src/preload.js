@@ -15,4 +15,7 @@ contextBridge.exposeInMainWorld("whisper", {
   saveAudio: (payload) => ipcRenderer.invoke("audio:save", payload),
   saveTranscript: (payload) => ipcRenderer.invoke("transcript:save", payload),
   copyText: (text) => ipcRenderer.invoke("clipboard:writeText", text),
+  getHistory: () => ipcRenderer.invoke("history:list"),
+  deleteHistoryEntry: (id) => ipcRenderer.invoke("history:delete", id),
+  clearHistory: () => ipcRenderer.invoke("history:clear"),
 });
