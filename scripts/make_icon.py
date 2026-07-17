@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import math
 import shutil
 import subprocess
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
+
+DIDOT = "/System/Library/Fonts/Supplemental/Didot.ttc"
+DIDOT_BOLD_INDEX = 1
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,25 +26,16 @@ def mix(a, b, t):
     return round(a * (1 - t) + b * t)
 
 
-def wave_points(left, right, center_y, amplitude, cycles, count):
-    points = []
-    for index in range(count):
-        t = index / (count - 1)
-        x = left + (right - left) * t
-        y = center_y - math.sin(t * math.pi * 2 * cycles) * amplitude
-        points.append((round(x), round(y)))
-    return points
-
-
-def draw_round_line(draw, points, fill, width):
-    draw.line(points, fill=fill, width=width, joint="curve")
-    radius = width // 2
-    for x, y in (points[0], points[-1]):
-        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=fill)
+def quote_ink():
+    """Rasterize a Didot closing double quote and crop to its ink box."""
+    font = ImageFont.truetype(DIDOT, 1600, index=DIDOT_BOLD_INDEX)
+    image = Image.new("L", (2400, 2800), 0)
+    ImageDraw.Draw(image).text((300, 240), "”", font=font, fill=255)
+    return image.crop(image.getbbox())
 
 
 def make_base():
-    scale = 4
+    scale = 2
     size = 1024
     canvas = size * scale
     image = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
@@ -60,12 +53,17 @@ def make_base():
     image.alpha_composite(bg)
     image.putalpha(rounded_mask(canvas, 224 * scale))
 
-    def s(value):
-        return round(value * scale)
-
-    draw = ImageDraw.Draw(image)
-    points = wave_points(s(238), s(786), s(512), s(116), 3, 220)
-    draw_round_line(draw, points, (141, 216, 200, 255), s(74))
+    # The Verse mark: a Didot closing quote in the house mint, optically centered.
+    ink = quote_ink()
+    ink_height = round(canvas * 0.44)
+    ink_width = max(1, round(ink.width * ink_height / ink.height))
+    scaled = ink.resize((ink_width, ink_height), Image.Resampling.LANCZOS)
+    mark = Image.new("RGBA", scaled.size, (141, 216, 200, 255))
+    mark.putalpha(scaled)
+    image.alpha_composite(
+        mark,
+        ((canvas - ink_width) // 2, (canvas - ink_height) // 2),
+    )
 
     image = image.resize((size, size), Image.Resampling.LANCZOS)
     BUILD.mkdir(exist_ok=True)

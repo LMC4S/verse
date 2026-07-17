@@ -1,21 +1,28 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("whisper", {
+contextBridge.exposeInMainWorld("verse", {
+  // Settings window
   getSettings: () => ipcRenderer.invoke("settings:get"),
   saveApiKey: (apiKey) => ipcRenderer.invoke("settings:saveApiKey", apiKey),
   saveTranscriptionSettings: (payload) => ipcRenderer.invoke("settings:saveTranscription", payload),
-  chooseSaveRoot: () => ipcRenderer.invoke("settings:chooseSaveRoot"),
-  openSaveRoot: () => ipcRenderer.invoke("open:saveRoot"),
-  revealPath: (filePath) => ipcRenderer.invoke("open:revealPath", filePath),
+  saveShortcut: (accelerator) => ipcRenderer.invoke("settings:saveShortcut", accelerator),
+  saveAutoPaste: (enabled) => ipcRenderer.invoke("settings:saveAutoPaste", enabled),
   getLocalEngineStatus: () => ipcRenderer.invoke("localEngine:status"),
   installLocalEngine: () => ipcRenderer.invoke("localEngine:install"),
   removeLocalEngine: () => ipcRenderer.invoke("localEngine:remove"),
   openLocalEngineFolder: () => ipcRenderer.invoke("localEngine:open"),
-  transcribeAudio: (audio) => ipcRenderer.invoke("audio:transcribe", audio),
-  saveAudio: (payload) => ipcRenderer.invoke("audio:save", payload),
-  saveTranscript: (payload) => ipcRenderer.invoke("transcript:save", payload),
-  copyText: (text) => ipcRenderer.invoke("clipboard:writeText", text),
+
+  // History window
   getHistory: () => ipcRenderer.invoke("history:list"),
   deleteHistoryEntry: (id) => ipcRenderer.invoke("history:delete", id),
   clearHistory: () => ipcRenderer.invoke("history:clear"),
+  copyText: (text) => ipcRenderer.invoke("clipboard:writeText", text),
+  onHistoryChanged: (callback) => ipcRenderer.on("history:changed", () => callback()),
+
+  // Recording panel
+  onRecorderCommand: (callback) =>
+    ipcRenderer.on("recorder:command", (_event, payload) => callback(payload)),
+  reportRecorderState: (state) => ipcRenderer.send("recorder:state", state),
+  completeRecording: (audio) => ipcRenderer.invoke("recorder:complete", audio),
+  hidePanel: () => ipcRenderer.send("panel:hide"),
 });

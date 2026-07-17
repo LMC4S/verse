@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'" />
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body data-state="idle">
+    <main class="panel">
+      <section class="view view-recording">
+        <div class="top">
+          <span class="record-dot"></span>
+          <span class="title">Recording</span>
+          <span class="timer" id="timer">00:00</span>
+        </div>
+        <canvas id="meter" width="512" height="72"></canvas>
+        <div class="bottom">
+          <button id="cancelButton" class="ghost" type="button">Cancel</button>
+          <button id="stopButton" class="primary" type="button">
+            Done<span class="key" id="shortcutHint"></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="view view-transcribing">
+        <div class="spinner"></div>
+        <p class="status-line">Transcribing…</p>
+      </section>
+
+      <section class="view view-done">
+        <div class="check">✓</div>
+        <p class="status-line">Copied to clipboard</p>
+      </section>
+
+      <section class="view view-error">
+        <div class="cross">!</div>
+        <p class="status-line" id="errorText">Something went wrong.</p>
+      </section>
+    </main>
+    <script src="panel.js"></script>
+  </body>
+</html>

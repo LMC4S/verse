@@ -1,18 +1,21 @@
 {
-  "name": "whisper-electron",
-  "version": "0.1.19",
-  "description": "A small desktop Whisper transcription app.",
+  "name": "verse",
+  "productName": "Verse",
+  "version": "0.3.0",
+  "description": "Speak. It becomes Verse. A menu bar voice transcription app for macOS.",
+  "license": "AGPL-3.0-only",
   "main": "src/main.js",
   "private": true,
   "scripts": {
     "start": "electron .",
     "icon": "python3 scripts/make_icon.py",
+    "tray-icons": "python3 scripts/make_tray_icons.py",
     "build": "electron-builder --mac dir",
     "dist": "electron-builder --mac dmg"
   },
   "build": {
-    "appId": "local.whisper.transcriber",
-    "productName": "Whisper",
+    "appId": "app.verse.transcriber",
+    "productName": "Verse",
     "mac": {
       "target": [
         {
@@ -30,7 +33,11 @@
       ],
       "category": "public.app-category.productivity",
       "identity": null,
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSMicrophoneUsageDescription": "Verse records audio to transcribe it."
+      }
     },
     "files": [
       "src/**/*",

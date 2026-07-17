@@ -1,8 +1,10 @@
-# Whisper Desktop
+# Verse
 
-A macOS app for recording voice and transcribing it with Whisper, either through the OpenAI API or a local model. Both the audio and the transcript are saved to a folder you choose, so the recording stays available after you've used the text somewhere else.
+*Speak. It becomes Verse.*
 
-Voice input in Claude isn't reliable enough for long recordings, and the original audio gets dropped once it's done.
+A macOS menu bar app for voice transcription, through the OpenAI API or a local Whisper model. Press the shortcut (**⌥Space** by default, configurable in Settings) — a small translucent panel drops down from the menu bar. Press again and your words are transcribed, copied to the clipboard, and pasted straight into whatever text box has focus. Esc cancels a recording.
+
+The menu bar mark — a Didot closing quote — shows the current state: **”** idle, a red dot recording, **…** transcribing. The History window keeps your past transcripts, searchable, one click to copy.
 
 ## Download
 
@@ -39,16 +41,14 @@ npm run dist
 
 ## Setup
 
-**OpenAI:** open Settings, paste your API key, select OpenAI as the engine.
+**OpenAI:** open Settings from the menu bar icon, paste your API key, select OpenAI as the engine.
 
 **Local MLX:** open Settings, select Local MLX, click Install. The first transcription also downloads the model weights (1–3 GB depending on the model).
 
-## Saved files
+**Auto-paste:** the first time Verse pastes into another app, macOS asks you to allow it under System Settings → Privacy & Security → Accessibility. Until then it falls back to clipboard-only.
 
-```
-your-folder/
-├── saved_audio/
-└── saved_transcripts/
-```
+Settings and transcript history are stored in Electron's user data directory (`~/Library/Application Support/Verse`).
 
-Settings are stored in Electron's user data directory.
+## License
+
+[AGPL-3.0](LICENSE)

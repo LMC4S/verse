@@ -1,0 +1,241 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light dark;
+  --text: rgba(0, 0, 0, 0.85);
+  --text-dim: rgba(0, 0, 0, 0.5);
+  --line: rgba(0, 0, 0, 0.08);
+  --field-bg: rgba(0, 0, 0, 0.05);
+  --field-border: rgba(0, 0, 0, 0.12);
+  --row-hover: rgba(0, 0, 0, 0.05);
+  --accent: #0a84ff;
+  --danger: #ff3b30;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: rgba(255, 255, 255, 0.88);
+    --text-dim: rgba(255, 255, 255, 0.5);
+    --line: rgba(255, 255, 255, 0.1);
+    --field-bg: rgba(255, 255, 255, 0.07);
+    --field-border: rgba(255, 255, 255, 0.14);
+    --row-hover: rgba(255, 255, 255, 0.07);
+    --danger: #ff453a;
+  }
+}
+
+html,
+body {
+  height: 100%;
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.titlebar {
+  flex: none;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  -webkit-app-region: drag;
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px 16px;
+  gap: 8px;
+}
+
+.toolbar {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+
+input[type="search"] {
+  flex: 1;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  border-radius: 7px;
+  padding: 5px 10px;
+  outline: none;
+  user-select: text;
+  cursor: text;
+}
+
+input[type="search"]:focus {
+  border-color: var(--accent);
+}
+
+button {
+  appearance: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  border-radius: 7px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--row-hover);
+}
+
+.count {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding-left: 2px;
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -6px;
+  padding: 0 6px;
+}
+
+.entry {
+  position: relative;
+  border-radius: 9px;
+  padding: 9px 10px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.entry:hover {
+  background: var(--row-hover);
+}
+
+.entry .meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  /* Keep the right corner free for the × delete button. */
+  padding-right: 28px;
+}
+
+.entry .time {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.entry .engine {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border: 1px solid var(--field-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.entry .copied-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.entry.copied .copied-tag {
+  opacity: 1;
+}
+
+/* While "Copied ✓" is showing, hide the delete button so they never collide. */
+.entry.copied .delete {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.entry .text {
+  font-size: 12.5px;
+  line-height: 1.5;
+  user-select: text;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.entry.expanded .text {
+  -webkit-line-clamp: unset;
+}
+
+.entry .delete {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0;
+}
+
+.entry:hover .delete {
+  opacity: 1;
+}
+
+.entry .delete:hover {
+  color: var(--danger);
+  background: var(--row-hover);
+}
+
+.empty {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  padding-top: 60px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--field-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

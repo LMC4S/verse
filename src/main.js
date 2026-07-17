@@ -1,4 +1,15 @@
-const { app, BrowserWindow, clipboard, dialog, ipcMain, shell } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  Notification,
+  Tray,
+  clipboard,
+  globalShortcut,
+  ipcMain,
+  nativeImage,
+  shell,
+} = require("electron");
 const fsSync = require("node:fs");
 const fs = require("node:fs/promises");
 const path = require("node:path");
@@ -10,9 +21,49 @@ const DEFAULT_MODEL = "whisper-1";
 const DEFAULT_ENGINE = "openai";
 const DEFAULT_MLX_MODEL = "mlx-community/whisper-large-v3-turbo";
 
+const DEFAULT_SHORTCUT = "Alt+Space";
+const FALLBACK_SHORTCUT = "Control+Alt+Space";
+
 const HISTORY_LIMIT = 200;
 
-let mainWindow;
+const PANEL_WIDTH = 300;
+const PANEL_HEIGHT = 148;
+
+// The app was renamed from "whisper-electron" to "Verse"; adopt the old
+// data directory (settings, history, local MLX engine) on first launch.
+function migrateLegacyUserData() {
+  const appData = app.getPath("appData");
+  const oldRoot = path.join(appData, "whisper-electron");
+  const newRoot = path.join(appData, "Verse");
+  if (!fsSync.existsSync(oldRoot) || fsSync.existsSync(path.join(newRoot, "settings.json"))) {
+    return;
+  }
+  try {
+    if (!fsSync.existsSync(newRoot)) {
+      fsSync.renameSync(oldRoot, newRoot);
+      return;
+    }
+    for (const item of ["settings.json", "history.json", "local-mlx"]) {
+      const source = path.join(oldRoot, item);
+      const target = path.join(newRoot, item);
+      if (fsSync.existsSync(source) && !fsSync.existsSync(target)) {
+        fsSync.renameSync(source, target);
+      }
+    }
+  } catch {
+    // If migration fails the app still works, just with fresh settings.
+  }
+}
+
+migrateLegacyUserData();
+
+let tray = null;
+let panelWindow = null;
+let settingsWindow = null;
+let historyWindow = null;
+let recorderState = "idle"; // idle | recording | transcribing
+let activeShortcut = null;
+let escapeRegistered = false;
 
 function settingsPath() {
   return path.join(app.getPath("userData"), "settings.json");
@@ -66,6 +117,8 @@ async function loadSettings() {
       saveRoot: settings.saveRoot || defaultSaveRoot(),
       engine: settings.engine || DEFAULT_ENGINE,
       mlxModel: settings.mlxModel || DEFAULT_MLX_MODEL,
+      shortcut: settings.shortcut || DEFAULT_SHORTCUT,
+      autoPaste: settings.autoPaste !== false,
     };
   } catch {
     return {
@@ -73,6 +126,8 @@ async function loadSettings() {
       saveRoot: defaultSaveRoot(),
       engine: DEFAULT_ENGINE,
       mlxModel: DEFAULT_MLX_MODEL,
+      shortcut: DEFAULT_SHORTCUT,
+      autoPaste: true,
     };
   }
 }
@@ -85,16 +140,6 @@ async function saveSettings(nextSettings) {
   return settings;
 }
 
-function safeStem(name, fallback) {
-  const value = String(name || fallback || "recording").normalize("NFC");
-  const cleaned = value.replace(/[/\\?%*:|"<>]/gu, "-");
-  const parsed = path.parse(cleaned);
-  const stem = (parsed.name || cleaned || fallback || "recording")
-    .replace(/\s+/gu, " ")
-    .replace(/^[.\s-]+|[.\s-]+$/gu, "");
-  return stem || fallback || "recording";
-}
-
 function extensionForAudio(fileName, mimeType) {
   const ext = path.extname(fileName || "").toLowerCase();
   if (ext) return ext;
@@ -103,21 +148,6 @@ function extensionForAudio(fileName, mimeType) {
   if ((mimeType || "").includes("wav")) return ".wav";
   if ((mimeType || "").includes("ogg")) return ".ogg";
   return ".webm";
-}
-
-async function uniquePath(directory, stem, extension) {
-  await fs.mkdir(directory, { recursive: true });
-  let candidate = path.join(directory, `${stem}${extension}`);
-  let counter = 2;
-  while (true) {
-    try {
-      await fs.access(candidate);
-      candidate = path.join(directory, `${stem}-${counter}${extension}`);
-      counter += 1;
-    } catch {
-      return candidate;
-    }
-  }
 }
 
 function audioBufferFromPayload(audio) {
@@ -131,7 +161,7 @@ function tempAudioPath(fileName) {
   const extension = extensionForAudio(fileName, "");
   return path.join(
     app.getPath("temp"),
-    `whisper-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`
+    `verse-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`
   );
 }
 
@@ -320,9 +350,10 @@ async function ensureLocalEngineReady() {
 function publicSettings(settings) {
   return {
     hasApiKey: Boolean(settings.apiKey),
-    saveRoot: settings.saveRoot,
     engine: settings.engine,
     mlxModel: settings.mlxModel,
+    shortcut: activeShortcut || settings.shortcut,
+    autoPaste: settings.autoPaste,
   };
 }
 
@@ -347,99 +378,6 @@ async function transcribeWithMlx(audio, settings) {
     await fs.unlink(audioPath).catch(() => {});
   }
 }
-
-async function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1040,
-    height: 780,
-    minWidth: 760,
-    minHeight: 620,
-    title: "Whisper",
-    backgroundColor: "#f7f7f5",
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 22, y: 22 },
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-
-  await mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
-}
-
-app.whenReady().then(createWindow);
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
-
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
-
-ipcMain.handle("settings:get", async () => {
-  const settings = await loadSettings();
-  return publicSettings(settings);
-});
-
-ipcMain.handle("settings:saveApiKey", async (_event, apiKey) => {
-  const key = String(apiKey || "").trim();
-  if (!key) throw new Error("Enter an API key first.");
-  const settings = await saveSettings({ apiKey: key });
-  return publicSettings(settings);
-});
-
-ipcMain.handle("settings:saveTranscription", async (_event, payload) => {
-  const engine = payload?.engine === "mlx" ? "mlx" : "openai";
-  const mlxModel = String(payload?.mlxModel || DEFAULT_MLX_MODEL).trim() || DEFAULT_MLX_MODEL;
-  const settings = await saveSettings({ engine, mlxModel });
-  return publicSettings(settings);
-});
-
-ipcMain.handle("settings:chooseSaveRoot", async () => {
-  const settings = await loadSettings();
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: "Choose save folder",
-    defaultPath: settings.saveRoot,
-    properties: ["openDirectory", "createDirectory"],
-  });
-  if (result.canceled || !result.filePaths[0]) {
-    return publicSettings(settings);
-  }
-  const next = await saveSettings({ saveRoot: result.filePaths[0] });
-  return publicSettings(next);
-});
-
-ipcMain.handle("localEngine:status", async () => {
-  return localEngineStatus();
-});
-
-ipcMain.handle("localEngine:install", async () => {
-  return installLocalEngine();
-});
-
-ipcMain.handle("localEngine:remove", async () => {
-  return removeLocalEngine();
-});
-
-ipcMain.handle("localEngine:open", async () => {
-  await openLocalEngineFolder();
-  return { ok: true };
-});
-
-ipcMain.handle("open:saveRoot", async () => {
-  const settings = await loadSettings();
-  await fs.mkdir(settings.saveRoot, { recursive: true });
-  await shell.openPath(settings.saveRoot);
-});
-
-ipcMain.handle("open:revealPath", async (_event, filePath) => {
-  const target = String(filePath || "");
-  if (!target) throw new Error("There is no saved file to open.");
-  shell.showItemInFolder(target);
-  return { ok: true };
-});
 
 async function transcribeWithOpenAi(audio, settings) {
   if (!settings.apiKey) throw new Error("Save an OpenAI API key first.");
@@ -472,18 +410,355 @@ async function transcribeWithOpenAi(audio, settings) {
   };
 }
 
-ipcMain.handle("audio:transcribe", async (_event, audio) => {
+// --- Menu bar UI -----------------------------------------------------------
+
+function trayIcon(name) {
+  const image = nativeImage.createFromPath(appResourcePath("src", "assets", `${name}.png`));
+  image.setTemplateImage(name.endsWith("Template"));
+  return image;
+}
+
+const trayIcons = {};
+
+function updateTrayIcon() {
+  if (!tray) return;
+  const name =
+    recorderState === "recording"
+      ? "recording"
+      : recorderState === "transcribing"
+        ? "busyTemplate"
+        : "quoteTemplate";
+  if (!trayIcons[name]) trayIcons[name] = trayIcon(name);
+  tray.setImage(trayIcons[name]);
+  tray.setToolTip(
+    recorderState === "recording"
+      ? "Verse — recording"
+      : recorderState === "transcribing"
+        ? "Verse — transcribing"
+        : "Verse"
+  );
+}
+
+function shortcutLabel(accelerator) {
+  return String(accelerator || "")
+    .replace("Control", "⌃")
+    .replace("Alt", "⌥")
+    .replace("Shift", "⇧")
+    .replace("Command", "⌘")
+    .replaceAll("+", "");
+}
+
+function menuPreview(text) {
+  const compact = String(text || "").replace(/\s+/gu, " ").trim();
+  return compact.length > 52 ? `${compact.slice(0, 52)}…` : compact;
+}
+
+function rebuildTrayMenu() {
+  if (!tray) return;
+  const menu = Menu.buildFromTemplate([
+    {
+      label:
+        recorderState === "recording"
+          ? "Stop Recording"
+          : recorderState === "transcribing"
+            ? "Transcribing…"
+            : "Start Recording",
+      enabled: recorderState !== "transcribing",
+      accelerator: activeShortcut || undefined,
+      registerAccelerator: false,
+      click: () => toggleRecording(),
+    },
+    { type: "separator" },
+    { label: "History…", click: () => openHistoryWindow() },
+    { type: "separator" },
+    {
+      label: "Settings…",
+      accelerator: "Command+,",
+      registerAccelerator: false,
+      click: () => openSettingsWindow(),
+    },
+    {
+      label: "Launch at Login",
+      type: "checkbox",
+      checked: app.getLoginItemSettings().openAtLogin,
+      click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
+    },
+    { type: "separator" },
+    { label: "Quit Verse", role: "quit" },
+  ]);
+  tray.setContextMenu(menu);
+}
+
+function createTray() {
+  trayIcons.quoteTemplate = trayIcon("quoteTemplate");
+  tray = new Tray(trayIcons.quoteTemplate);
+  updateTrayIcon();
+}
+
+function positionPanel() {
+  if (!tray || !panelWindow) return;
+  const bounds = tray.getBounds();
+  const x = Math.round(bounds.x + bounds.width / 2 - PANEL_WIDTH / 2);
+  const y = Math.round(bounds.y + bounds.height + 8);
+  panelWindow.setPosition(x, y, false);
+}
+
+function createPanelWindow() {
+  panelWindow = new BrowserWindow({
+    width: PANEL_WIDTH,
+    height: PANEL_HEIGHT,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    hasShadow: true,
+    roundedCorners: true,
+    vibrancy: "hud",
+    visualEffectState: "active",
+    backgroundColor: "#00000000",
+    hiddenInMissionControl: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+  panelWindow.setAlwaysOnTop(true, "status");
+  panelWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  panelWindow.loadFile(path.join(__dirname, "panel", "index.html"));
+}
+
+function openSettingsWindow() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+  settingsWindow = new BrowserWindow({
+    width: 460,
+    height: 680,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: "Verse Settings",
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 16 },
+    vibrancy: "under-window",
+    visualEffectState: "active",
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  settingsWindow.loadFile(path.join(__dirname, "settings", "index.html"));
+  settingsWindow.on("closed", () => {
+    settingsWindow = null;
+  });
+}
+
+function openHistoryWindow() {
+  if (historyWindow && !historyWindow.isDestroyed()) {
+    historyWindow.show();
+    historyWindow.focus();
+    return;
+  }
+  historyWindow = new BrowserWindow({
+    width: 520,
+    height: 640,
+    minWidth: 380,
+    minHeight: 400,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: "Verse History",
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 16 },
+    vibrancy: "under-window",
+    visualEffectState: "active",
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  historyWindow.loadFile(path.join(__dirname, "history", "index.html"));
+  historyWindow.on("closed", () => {
+    historyWindow = null;
+  });
+}
+
+function notifyHistoryChanged() {
+  if (historyWindow && !historyWindow.isDestroyed()) {
+    historyWindow.webContents.send("history:changed");
+  }
+}
+
+function sendPanel(channel, payload) {
+  if (panelWindow && !panelWindow.isDestroyed()) {
+    panelWindow.webContents.send(channel, payload);
+  }
+}
+
+function notify(title, body) {
+  if (!Notification.isSupported()) return;
+  new Notification({ title, body: String(body || ""), silent: false }).show();
+}
+
+// --- Recording state machine ------------------------------------------------
+
+function startRecording() {
+  if (recorderState !== "idle" || !panelWindow) return;
+  positionPanel();
+  panelWindow.showInactive();
+  sendPanel("recorder:command", { action: "start", shortcut: activeShortcut });
+}
+
+function stopRecording() {
+  if (recorderState !== "recording") return;
+  sendPanel("recorder:command", { action: "stop" });
+}
+
+function cancelRecording() {
+  if (recorderState !== "recording") return;
+  sendPanel("recorder:command", { action: "cancel" });
+}
+
+function toggleRecording() {
+  if (recorderState === "recording") {
+    stopRecording();
+  } else if (recorderState === "idle") {
+    startRecording();
+  }
+}
+
+function updateEscapeShortcut() {
+  const wanted = recorderState === "recording";
+  if (wanted && !escapeRegistered) {
+    escapeRegistered = globalShortcut.register("Escape", () => cancelRecording());
+  } else if (!wanted && escapeRegistered) {
+    globalShortcut.unregister("Escape");
+    escapeRegistered = false;
+  }
+}
+
+function setRecorderState(state) {
+  const next = state === "recording" || state === "transcribing" ? state : "idle";
+  if (next === recorderState) return;
+  recorderState = next;
+  updateTrayIcon();
+  updateEscapeShortcut();
+  rebuildTrayMenu();
+}
+
+function registerToggleShortcut(preferred) {
+  const tryRegister = (accelerator) => {
+    try {
+      return globalShortcut.register(accelerator, () => toggleRecording());
+    } catch {
+      return false;
+    }
+  };
+
+  if (tryRegister(preferred)) return preferred;
+  if (preferred !== FALLBACK_SHORTCUT && tryRegister(FALLBACK_SHORTCUT)) {
+    notify(
+      "Shortcut unavailable",
+      `${shortcutLabel(preferred)} is taken by another app. Using ${shortcutLabel(FALLBACK_SHORTCUT)} instead.`
+    );
+    return FALLBACK_SHORTCUT;
+  }
+  notify("Shortcut unavailable", "Could not register a global shortcut. Use the menu bar icon.");
+  return null;
+}
+
+function pasteIntoFrontApp() {
+  return new Promise((resolve) => {
+    const child = spawn("/usr/bin/osascript", [
+      "-e",
+      'tell application "System Events" to keystroke "v" using command down',
+    ]);
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => resolve(code === 0));
+  });
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// --- IPC ---------------------------------------------------------------------
+
+ipcMain.handle("settings:get", async () => {
   const settings = await loadSettings();
-  const result =
-    settings.engine === "mlx"
-      ? await transcribeWithMlx(audio, settings)
-      : await transcribeWithOpenAi(audio, settings);
-  await addHistoryEntry({
-    text: result.text,
-    source: audio?.fileName || "recording",
-    engine: settings.engine,
-  }).catch(() => {});
-  return result;
+  return publicSettings(settings);
+});
+
+ipcMain.handle("settings:saveApiKey", async (_event, apiKey) => {
+  const key = String(apiKey || "").trim();
+  if (!key) throw new Error("Enter an API key first.");
+  const settings = await saveSettings({ apiKey: key });
+  return publicSettings(settings);
+});
+
+ipcMain.handle("settings:saveTranscription", async (_event, payload) => {
+  const engine = payload?.engine === "mlx" ? "mlx" : "openai";
+  const mlxModel = String(payload?.mlxModel || DEFAULT_MLX_MODEL).trim() || DEFAULT_MLX_MODEL;
+  const settings = await saveSettings({ engine, mlxModel });
+  return publicSettings(settings);
+});
+
+ipcMain.handle("settings:saveShortcut", async (_event, accelerator) => {
+  const next = String(accelerator || "").trim();
+  if (!next) throw new Error("Press a key combination first.");
+
+  if (activeShortcut) globalShortcut.unregister(activeShortcut);
+  let registered = false;
+  try {
+    registered = globalShortcut.register(next, () => toggleRecording());
+  } catch {
+    registered = false;
+  }
+  if (!registered) {
+    if (activeShortcut) globalShortcut.register(activeShortcut, () => toggleRecording());
+    throw new Error(`Could not register ${shortcutLabel(next)} — it may be taken by another app.`);
+  }
+
+  activeShortcut = next;
+  const settings = await saveSettings({ shortcut: next });
+  rebuildTrayMenu();
+  return publicSettings(settings);
+});
+
+ipcMain.handle("settings:saveAutoPaste", async (_event, enabled) => {
+  const settings = await saveSettings({ autoPaste: Boolean(enabled) });
+  return publicSettings(settings);
+});
+
+ipcMain.handle("localEngine:status", async () => {
+  return localEngineStatus();
+});
+
+ipcMain.handle("localEngine:install", async () => {
+  return installLocalEngine();
+});
+
+ipcMain.handle("localEngine:remove", async () => {
+  return removeLocalEngine();
+});
+
+ipcMain.handle("localEngine:open", async () => {
+  await openLocalEngineFolder();
+  return { ok: true };
 });
 
 ipcMain.handle("history:list", async () => {
@@ -502,28 +777,77 @@ ipcMain.handle("history:clear", async () => {
   return [];
 });
 
-ipcMain.handle("audio:save", async (_event, { audio, name }) => {
-  const settings = await loadSettings();
-  const buffer = audioBufferFromPayload(audio);
-  const directory = path.join(settings.saveRoot, "saved_audio");
-  const extension = extensionForAudio(audio.fileName, audio.mimeType);
-  const target = await uniquePath(directory, safeStem(name, "recording"), extension);
-  await fs.writeFile(target, buffer);
-  return { path: target };
-});
-
-ipcMain.handle("transcript:save", async (_event, { text, name }) => {
-  const settings = await loadSettings();
-  const transcript = String(text || "").trim();
-  if (!transcript) throw new Error("There is no transcript to save.");
-
-  const directory = path.join(settings.saveRoot, "saved_transcripts");
-  const target = await uniquePath(directory, safeStem(name, "transcript"), ".txt");
-  await fs.writeFile(target, transcript + "\n", "utf8");
-  return { path: target };
-});
-
 ipcMain.handle("clipboard:writeText", async (_event, text) => {
   clipboard.writeText(String(text || ""));
   return { ok: true };
+});
+
+ipcMain.on("recorder:state", (_event, state) => {
+  setRecorderState(state);
+});
+
+ipcMain.on("panel:hide", () => {
+  if (panelWindow && !panelWindow.isDestroyed()) panelWindow.hide();
+});
+
+ipcMain.handle("recorder:complete", async (_event, audio) => {
+  const settings = await loadSettings();
+  try {
+    const result =
+      settings.engine === "mlx"
+        ? await transcribeWithMlx(audio, settings)
+        : await transcribeWithOpenAi(audio, settings);
+    const text = String(result.text || "").trim();
+    if (!text) throw new Error("The transcript came back empty.");
+    clipboard.writeText(text);
+    await addHistoryEntry({
+      text,
+      source: audio?.fileName || "recording",
+      engine: settings.engine,
+    }).catch(() => {});
+
+    let pasted = false;
+    if (settings.autoPaste) {
+      if (panelWindow && panelWindow.isFocused()) {
+        // A click on the panel focused us; give focus back before pasting.
+        panelWindow.hide();
+        await delay(250);
+      }
+      pasted = await pasteIntoFrontApp();
+    }
+    if (pasted) {
+      notify("Pasted", menuPreview(text));
+    } else if (settings.autoPaste) {
+      notify(
+        "Copied to clipboard",
+        "To paste automatically, allow Verse under System Settings → Privacy & Security → Accessibility."
+      );
+    } else {
+      notify("Copied to clipboard", menuPreview(text));
+    }
+    notifyHistoryChanged();
+    return { text };
+  } catch (error) {
+    notify("Transcription failed", error.message);
+    throw error;
+  }
+});
+
+// --- App lifecycle -----------------------------------------------------------
+
+app.whenReady().then(async () => {
+  if (app.dock) app.dock.hide();
+  createTray();
+  createPanelWindow();
+  const settings = await loadSettings();
+  activeShortcut = registerToggleShortcut(settings.shortcut || DEFAULT_SHORTCUT);
+  rebuildTrayMenu();
+});
+
+app.on("window-all-closed", () => {
+  // Menu bar app: keep running with no windows.
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });
