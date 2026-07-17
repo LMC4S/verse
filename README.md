@@ -8,9 +8,15 @@ The menu bar mark shows the current state: **”** idle, a red dot recording, **
 
 ![Settings and History windows](docs/windows.png)
 
-## Download
+## Install
 
-Grab `Verse-x.y.z-arm64.dmg` (Apple Silicon) from the [Releases page](https://github.com/LMC4S/verse/releases).
+With [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask lmc4s/tap/verse
+```
+
+Or grab `Verse-x.y.z-arm64.dmg` (Apple Silicon) from the [Releases page](https://github.com/LMC4S/verse/releases).
 
 The app is not signed or notarized, so on first launch right-click the app and choose Open, or allow it under System Settings > Privacy & Security. On first use, macOS will also ask for Microphone access, and for Accessibility if auto-paste is on.
 
