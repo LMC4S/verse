@@ -1,20 +1,16 @@
-# Verse
+# Verse — Whisper that lives in the menu bar
 
-*Speak. It becomes Verse.*
-
-A macOS menu bar app for voice transcription, through the OpenAI API or a local Whisper model. Press the shortcut (**⌥Space** by default, configurable in Settings) — a small translucent panel drops down from the menu bar. Press again and your words are transcribed, copied to the clipboard, and pasted straight into whatever text box has focus. Esc cancels a recording.
+A lightweight macOS app for voice transcription that stays out of the way: a quote mark in the menu bar, a translucent panel while recording, and finished text wherever the cursor sits. One shortcut (**⌥Space** by default, configurable) starts and ends a recording; the transcript lands on the clipboard and is pasted into the focused text field. Transcription runs on Whisper — through the OpenAI API, or fully on-device with a local MLX model. Esc cancels.
 
 ![Recording panel under the menu bar](docs/hero.png)
 
-The menu bar mark — a Didot closing quote — shows the current state: **”** idle, a red dot recording, **…** transcribing. The History window keeps your past transcripts, searchable, one click to copy.
+The menu bar mark shows the current state: **”** idle, a red dot recording, **…** transcribing. Past transcripts are kept in a searchable History window — click an entry to copy it.
 
-| Settings — local or API engine, shortcut, auto-paste | History — search, copy, delete |
-| :---: | :---: |
-| ![Settings window](docs/settings.png) | ![History window](docs/history.png) |
+![Settings and History windows](docs/windows.png)
 
 ## Download
 
-Grab `Verse-x.y.z-arm64.dmg` (Apple Silicon) from the [Releases page](https://github.com/LMC4S/macOS-whisper/releases).
+Grab `Verse-x.y.z-arm64.dmg` (Apple Silicon) from the [Releases page](https://github.com/LMC4S/verse/releases).
 
 The app is not signed or notarized, so on first launch right-click the app and choose Open, or allow it under System Settings > Privacy & Security. On first use, macOS will also ask for Microphone access, and for Accessibility if auto-paste is on.
 
@@ -54,6 +50,10 @@ npm run dist
 **Auto-paste:** the first time Verse pastes into another app, macOS asks you to allow it under System Settings → Privacy & Security → Accessibility. Until then it falls back to clipboard-only.
 
 Settings and transcript history are stored in Electron's user data directory (`~/Library/Application Support/Verse`).
+
+## Privacy
+
+Verse has no telemetry or accounts; the DMG is a packaged build of this repository. Audio is recorded only while a recording is active. The Local MLX engine runs entirely on-device; the OpenAI engine sends audio to OpenAI for transcription. Settings and history are plain JSON files in the user data folder.
 
 ## License
 
