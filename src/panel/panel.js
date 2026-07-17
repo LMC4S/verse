@@ -25,7 +25,9 @@ function setState(state) {
 }
 
 function recordingType() {
-  const candidates = ["audio/webm", "audio/mp4"];
+  // MP4/AAC first: every engine reads it, including Apple's Speech framework
+  // (which cannot decode WebM).
+  const candidates = ["audio/mp4", "audio/webm"];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
 }
 

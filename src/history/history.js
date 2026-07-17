@@ -86,7 +86,8 @@ function render() {
     time.textContent = formatTime(entry.createdAt);
     const engine = document.createElement("span");
     engine.className = "engine";
-    engine.textContent = entry.engine === "mlx" ? "MLX" : "API";
+    engine.textContent =
+      entry.engine === "mlx" ? "MLX" : entry.engine === "apple" ? "APPLE" : "API";
     const copiedTag = document.createElement("span");
     copiedTag.className = "copied-tag";
     copiedTag.textContent = "Copied ✓";

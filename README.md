@@ -28,6 +28,8 @@ The app is not signed or notarized, so on first launch right-click the app and c
 
 Default model: `mlx-community/whisper-large-v3-turbo`. Any compatible model from [mlx-community](https://huggingface.co/mlx-community) works — swap it in Settings.
 
+**Apple Speech** — macOS's own on-device speech models (macOS 26 or later). Offline, no key, no model download beyond what the system fetches once. Fast and accurate for clear speech in [supported locales](https://developer.apple.com/documentation/speech/speechtranscriber); Whisper remains the stronger choice for noisy audio and less common languages.
+
 ## Requirements
 
 - macOS (Apple Silicon required for the local engine)

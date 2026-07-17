@@ -181,6 +181,10 @@ function localMlxScriptPath() {
   return unpackedResourcePath("src", "local_mlx_transcribe.py");
 }
 
+function appleHelperPath() {
+  return unpackedResourcePath("src", "bin", "verse-apple-transcribe");
+}
+
 function localEngineRoot() {
   return path.join(app.getPath("userData"), "local-mlx");
 }
@@ -376,6 +380,30 @@ async function transcribeWithMlx(audio, settings) {
     if (result.error) throw new Error(result.error);
     if (typeof result.text !== "string") {
       throw new Error("MLX response did not include transcript text.");
+    }
+    return { text: result.text, usage: null };
+  } finally {
+    await fs.unlink(audioPath).catch(() => {});
+  }
+}
+
+async function transcribeWithApple(audio) {
+  const helper = appleHelperPath();
+  if (!fsSync.existsSync(helper)) {
+    throw new Error("Apple Speech helper is missing — run scripts/build_apple_helper.sh.");
+  }
+  if ((audio?.mimeType || "").includes("webm")) {
+    throw new Error("Apple Speech needs an MP4 recording; this recording is WebM.");
+  }
+  const buffer = audioBufferFromPayload(audio);
+  const audioPath = tempAudioPath(audio.fileName || "recording.mp4");
+  await fs.writeFile(audioPath, buffer);
+  try {
+    const output = await runProcess(helper, [audioPath], { env: process.env });
+    const result = JSON.parse(output);
+    if (result.error) throw new Error(result.error);
+    if (typeof result.text !== "string") {
+      throw new Error("Apple Speech did not return transcript text.");
     }
     return { text: result.text, usage: null };
   } finally {
@@ -715,7 +743,7 @@ ipcMain.handle("settings:saveApiKey", async (_event, apiKey) => {
 });
 
 ipcMain.handle("settings:saveTranscription", async (_event, payload) => {
-  const engine = payload?.engine === "mlx" ? "mlx" : "openai";
+  const engine = ["mlx", "apple"].includes(payload?.engine) ? payload.engine : "openai";
   const mlxModel = String(payload?.mlxModel || DEFAULT_MLX_MODEL).trim() || DEFAULT_MLX_MODEL;
   const settings = await saveSettings({ engine, mlxModel });
   return publicSettings(settings);
@@ -817,7 +845,9 @@ ipcMain.handle("recorder:complete", async (_event, audio) => {
     const result =
       settings.engine === "mlx"
         ? await transcribeWithMlx(audio, settings)
-        : await transcribeWithOpenAi(audio, settings);
+        : settings.engine === "apple"
+          ? await transcribeWithApple(audio)
+          : await transcribeWithOpenAi(audio, settings);
     const text = String(result.text || "").trim();
     if (!text) throw new Error("The transcript came back empty.");
     clipboard.writeText(text);

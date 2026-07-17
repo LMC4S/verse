@@ -1,7 +1,7 @@
 {
   "name": "verse",
   "productName": "Verse",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Whisper voice transcription in the macOS menu bar.",
   "license": "AGPL-3.0-only",
   "main": "src/main.js",
@@ -10,6 +10,8 @@
     "start": "electron .",
     "icon": "python3 scripts/make_icon.py",
     "tray-icons": "python3 scripts/make_tray_icons.py",
+    "helper": "bash scripts/build_apple_helper.sh",
+    "predist": "npm run helper",
     "build": "electron-builder --mac dir",
     "dist": "electron-builder --mac dmg"
   },
@@ -36,7 +38,8 @@
       "icon": "build/icon.icns",
       "extendInfo": {
         "LSUIElement": true,
-        "NSMicrophoneUsageDescription": "Verse records audio to transcribe it."
+        "NSMicrophoneUsageDescription": "Verse records audio to transcribe it.",
+        "NSSpeechRecognitionUsageDescription": "Verse can transcribe recordings with Apple's on-device speech models."
       }
     },
     "files": [
@@ -44,7 +47,8 @@
       "package.json"
     ],
     "asarUnpack": [
-      "src/local_mlx_transcribe.py"
+      "src/local_mlx_transcribe.py",
+      "src/bin/**"
     ]
   },
   "devDependencies": {

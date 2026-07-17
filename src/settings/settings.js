@@ -200,7 +200,13 @@ saveEngineButton.addEventListener("click", async () => {
       mlxModel: mlxModelInput.value,
     });
     applySettings(settings);
-    setStatus(settings.engine === "mlx" ? "Local MLX enabled." : "OpenAI API enabled.");
+    setStatus(
+      settings.engine === "mlx"
+        ? "Local MLX enabled."
+        : settings.engine === "apple"
+          ? "Apple Speech enabled — on-device, macOS 26+."
+          : "OpenAI API enabled."
+    );
   } catch (error) {
     setStatus(error.message);
   } finally {

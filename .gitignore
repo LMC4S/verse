@@ -16,3 +16,6 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Compiled helpers (built by scripts/build_apple_helper.sh)
+src/bin/
