@@ -139,7 +139,7 @@ async function loadSettings() {
       shortcut: settings.shortcut || DEFAULT_SHORTCUT,
       autoPaste: settings.autoPaste !== false,
       notifications: settings.notifications !== false,
-      livePreview: settings.livePreview !== false,
+      livePreview: settings.livePreview === true,
     };
   } catch {
     return {
@@ -150,7 +150,7 @@ async function loadSettings() {
       shortcut: DEFAULT_SHORTCUT,
       autoPaste: true,
       notifications: true,
-      livePreview: true,
+      livePreview: false,
     };
   }
 }

@@ -63,7 +63,7 @@ function applySettings(settings) {
   micKeyToggle.checked = Boolean(settings.micKeyEnabled);
   autoPasteToggle.checked = Boolean(settings.autoPaste);
   notifyToggle.checked = settings.notifications !== false;
-  livePreviewToggle.checked = settings.livePreview !== false;
+  livePreviewToggle.checked = settings.livePreview === true;
 
   engineSelect.value = settings.engine || "openai";
   mlxModelInput.value = settings.mlxModel || "";
