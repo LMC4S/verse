@@ -100,6 +100,13 @@ body {
   flex: 1;
 }
 
+.key-icon {
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+  margin: 0 1px;
+}
+
 .row.actions {
   justify-content: flex-end;
 }

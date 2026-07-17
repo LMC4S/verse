@@ -51,7 +51,7 @@ function applySettings(settings) {
   if (settings.shortcut) {
     shortcutButton.textContent =
       settings.micKeyEnabled && settings.shortcut === "F13"
-        ? "🎤 (F13)"
+        ? "Dictation Key"
         : shortcutLabel(settings.shortcut);
   }
   micKeyToggle.checked = Boolean(settings.micKeyEnabled);
@@ -196,8 +196,8 @@ micKeyToggle.addEventListener("change", async () => {
     applySettings(settings);
     setStatus(
       settings.micKeyEnabled
-        ? "The 🎤 key now starts recording."
-        : "The 🎤 key is back to Apple Dictation."
+        ? "The dictation key now starts recording."
+        : "The dictation key is back to Apple Dictation."
     );
   } catch (error) {
     micKeyToggle.checked = !micKeyToggle.checked;
