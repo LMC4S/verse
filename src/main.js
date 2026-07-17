@@ -447,21 +447,49 @@ async function transcribeWithMlx(audio, settings) {
   }
 }
 
+// Runs the helper and reports its JSON error message even on a non-zero
+// exit (the helper prints {"error": ...} to stdout and exits 1).
+function runAppleHelper(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(appleHelperPath(), args, { env: process.env });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      try {
+        const result = JSON.parse(stdout);
+        if (result.error) {
+          reject(new Error(result.error));
+          return;
+        }
+        resolve(result);
+      } catch {
+        reject(
+          new Error(stderr.trim() || stdout.trim() || `Apple Speech helper exited with ${code}.`)
+        );
+      }
+    });
+  });
+}
+
 async function transcribeWithApple(audio) {
-  const helper = appleHelperPath();
-  if (!fsSync.existsSync(helper)) {
+  if (!fsSync.existsSync(appleHelperPath())) {
     throw new Error("Apple Speech helper is missing — run scripts/build_apple_helper.sh.");
   }
-  if ((audio?.mimeType || "").includes("webm")) {
-    throw new Error("Apple Speech needs an MP4 recording; this recording is WebM.");
-  }
   const buffer = audioBufferFromPayload(audio);
-  const audioPath = tempAudioPath(audio.fileName || "recording.mp4");
+  if (!buffer.length) {
+    throw new Error("The recording came back empty.");
+  }
+  const audioPath = tempAudioPath(audio.fileName || "recording.wav");
   await fs.writeFile(audioPath, buffer);
   try {
-    const output = await runProcess(helper, [audioPath], { env: process.env });
-    const result = JSON.parse(output);
-    if (result.error) throw new Error(result.error);
+    const result = await runAppleHelper([audioPath]);
     if (typeof result.text !== "string") {
       throw new Error("Apple Speech did not return transcript text.");
     }
@@ -708,11 +736,17 @@ function notify(title, body) {
 
 // --- Recording state machine ------------------------------------------------
 
-function startRecording() {
+async function startRecording() {
   if (recorderState !== "idle" || !panelWindow) return;
+  const settings = await loadSettings();
+  if (recorderState !== "idle") return;
   positionPanel();
   panelWindow.showInactive();
-  sendPanel("recorder:command", { action: "start", shortcut: activeShortcut });
+  sendPanel("recorder:command", {
+    action: "start",
+    shortcut: activeShortcut,
+    wav: settings.engine === "apple",
+  });
 }
 
 function stopRecording() {

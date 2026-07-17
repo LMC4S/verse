@@ -10,6 +10,7 @@ const errorText = document.querySelector("#errorText");
 let mediaRecorder = null;
 let recordedChunks = [];
 let cancelled = false;
+let wantsWav = false;
 let startedAt = 0;
 let timer = null;
 let audioContext = null;
@@ -25,10 +26,53 @@ function setState(state) {
 }
 
 function recordingType() {
-  // MP4/AAC first: every engine reads it, including Apple's Speech framework
-  // (which cannot decode WebM).
-  const candidates = ["audio/mp4", "audio/webm"];
+  // WebM/Opus: Electron's MediaRecorder advertises audio/mp4 but records
+  // zero bytes with it. Engines that cannot read WebM get a WAV conversion.
+  const candidates = ["audio/webm", "audio/mp4"];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+// Decode the recording with Chromium's decoder and re-encode as 16 kHz mono
+// WAV, for engines that cannot read WebM (Apple's Speech framework).
+async function blobToWav(blob) {
+  const decodeContext = new AudioContext();
+  let decoded;
+  try {
+    decoded = await decodeContext.decodeAudioData(await blob.arrayBuffer());
+  } finally {
+    decodeContext.close().catch(() => {});
+  }
+  const rate = 16000;
+  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * rate), rate);
+  const source = offline.createBufferSource();
+  source.buffer = decoded;
+  source.connect(offline.destination);
+  source.start();
+  const rendered = await offline.startRendering();
+  const samples = rendered.getChannelData(0);
+
+  const wav = new DataView(new ArrayBuffer(44 + samples.length * 2));
+  const writeString = (offset, text) => {
+    for (let i = 0; i < text.length; i += 1) wav.setUint8(offset + i, text.charCodeAt(i));
+  };
+  writeString(0, "RIFF");
+  wav.setUint32(4, 36 + samples.length * 2, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  wav.setUint32(16, 16, true);
+  wav.setUint16(20, 1, true);
+  wav.setUint16(22, 1, true);
+  wav.setUint32(24, rate, true);
+  wav.setUint32(28, rate * 2, true);
+  wav.setUint16(32, 2, true);
+  wav.setUint16(34, 16, true);
+  writeString(36, "data");
+  wav.setUint32(40, samples.length * 2, true);
+  for (let i = 0, offset = 44; i < samples.length; i += 1, offset += 2) {
+    const sample = Math.max(-1, Math.min(1, samples[i]));
+    wav.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+  return new Blob([wav.buffer], { type: "audio/wav" });
 }
 
 function extensionForType(type) {
@@ -166,10 +210,19 @@ async function startRecording() {
       }
 
       const type = mediaRecorder.mimeType || mimeType || "audio/webm";
-      const extension = extensionForType(type);
-      const blob = new Blob(recordedChunks, { type });
+      let blob = new Blob(recordedChunks, { type });
       recordedChunks = [];
-      const file = new File([blob], `recording-${Date.now()}.${extension}`, { type });
+      let extension = extensionForType(type);
+      if (wantsWav && !type.includes("wav")) {
+        try {
+          blob = await blobToWav(blob);
+          extension = "wav";
+        } catch {
+          // Fall through with the original recording; the engine reports
+          // a clearer error than a silent failure here would.
+        }
+      }
+      const file = new File([blob], `recording-${Date.now()}.${extension}`, { type: blob.type });
       await transcribe(file, durationMs);
     });
 
@@ -204,9 +257,12 @@ function shortcutLabel(accelerator) {
     .replaceAll("+", "");
 }
 
-window.verse.onRecorderCommand(({ action, shortcut }) => {
+window.verse.onRecorderCommand(({ action, shortcut, wav }) => {
   if (shortcut) shortcutHint.textContent = shortcutLabel(shortcut);
-  if (action === "start") startRecording();
+  if (action === "start") {
+    wantsWav = Boolean(wav);
+    startRecording();
+  }
   if (action === "stop") stopRecording();
   if (action === "cancel") cancelRecording();
 });
