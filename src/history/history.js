@@ -39,12 +39,26 @@ function formatTotalDuration(ms) {
   return `${seconds}s`;
 }
 
+const API_COST_PER_MINUTE = 0.006; // OpenAI whisper-1 pricing, USD
+
+function entryMinutes(entry) {
+  if (entry.durationMs) return entry.durationMs / 60_000;
+  // Entries older than duration tracking: assume a 150 words-per-minute pace.
+  return wordCount(entry.text) / 150;
+}
+
 function statsLine(items) {
   const parts = [`${items.length} transcript${items.length === 1 ? "" : "s"}`];
   const words = items.reduce((sum, entry) => sum + wordCount(entry.text), 0);
   parts.push(`${words.toLocaleString()} word${words === 1 ? "" : "s"}`);
   const audioMs = items.reduce((sum, entry) => sum + (entry.durationMs || 0), 0);
   if (audioMs > 0) parts.push(`${formatTotalDuration(audioMs)} of audio`);
+  const cost = items
+    .filter((entry) => entry.engine === "openai")
+    .reduce((sum, entry) => sum + entryMinutes(entry), 0) * API_COST_PER_MINUTE;
+  if (cost > 0) {
+    parts.push(cost < 0.01 ? "< $0.01 API cost" : `≈ $${cost.toFixed(2)} API cost`);
+  }
   return parts.join(" · ");
 }
 
