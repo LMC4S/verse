@@ -23,8 +23,10 @@ final class SpectrumAnalyzer {
         vDSP_destroy_fftsetup(fftSetup)
     }
 
+    /// Feed the raw microphone tap buffer (float, device sample rate) — the
+    /// same signal WebAudio's AnalyserNode taps in v1.
     func append(_ buffer: AVAudioPCMBuffer) {
-        guard let int16Data = buffer.int16ChannelData?[0] else { return }
+        guard let floatData = buffer.floatChannelData?[0] else { return }
         let count = Int(buffer.frameLength)
         guard count > 0 else { return }
 
@@ -33,12 +35,12 @@ final class SpectrumAnalyzer {
 
         if count >= Self.fftSize {
             for index in 0..<Self.fftSize {
-                latest[index] = Float(int16Data[count - Self.fftSize + index]) / 32768
+                latest[index] = floatData[count - Self.fftSize + index]
             }
         } else {
             latest.removeFirst(count)
             for index in 0..<count {
-                latest.append(Float(int16Data[index]) / 32768)
+                latest.append(floatData[index])
             }
         }
 
@@ -62,7 +64,9 @@ final class SpectrumAnalyzer {
         for index in 0..<Self.binCount {
             let magnitude = sqrt(real[index] * real[index] + imag[index] * imag[index])
                 / Float(Self.fftSize)
-            smoothed[index] = 0.75 * smoothed[index] + 0.25 * magnitude
+            // Snappier than v1's 0.75 because we update ~12×/s, not 60×/s;
+            // this matches the same ~60 ms time constant.
+            smoothed[index] = 0.45 * smoothed[index] + 0.55 * magnitude
         }
     }
 
@@ -156,6 +160,8 @@ final class Recorder {
     }
 
     private func process(_ buffer: AVAudioPCMBuffer) {
+        spectrum.append(buffer)
+
         // Convert to 16 kHz mono int16, write to the WAV, feed the preview.
         guard let converter else { return }
         let ratio = Self.targetFormat.sampleRate / buffer.format.sampleRate
@@ -176,7 +182,6 @@ final class Recorder {
         }
         guard status != .error, out.frameLength > 0 else { return }
         try? file?.write(from: out)
-        spectrum.append(out)
         onBuffer?(out)
     }
 

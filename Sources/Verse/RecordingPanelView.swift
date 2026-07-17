@@ -57,27 +57,9 @@ struct RecordingPanelView: View {
             }
         }
         .frame(width: currentSize.width, height: currentSize.height)
-        .glassEffect(.clear.interactive(), in: .rect(cornerRadius: 26))
-        // Liquid-glass rim light: the .clear variant is flat by design (the
-        // specular edge belongs to .regular), so draw the lensing signature —
-        // bright top rim, dim sides, faint bottom reflection — ourselves.
-        .overlay(
-            RoundedRectangle(cornerRadius: 26)
-                .strokeBorder(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(0.55), location: 0),
-                            .init(color: .white.opacity(0.14), location: 0.25),
-                            .init(color: .white.opacity(0.05), location: 0.6),
-                            .init(color: .white.opacity(0.22), location: 1),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-                .allowsHitTesting(false)
-        )
+        // .regular carries Apple's real refractive edge lensing (.clear is
+        // flat by design and needed a painted rim).
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 26))
         .colorScheme(.dark)
     }
 
