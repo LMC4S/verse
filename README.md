@@ -4,7 +4,13 @@
 
 A macOS menu bar app for voice transcription, through the OpenAI API or a local Whisper model. Press the shortcut (**⌥Space** by default, configurable in Settings) — a small translucent panel drops down from the menu bar. Press again and your words are transcribed, copied to the clipboard, and pasted straight into whatever text box has focus. Esc cancels a recording.
 
+![Recording panel under the menu bar](docs/hero.png)
+
 The menu bar mark — a Didot closing quote — shows the current state: **”** idle, a red dot recording, **…** transcribing. The History window keeps your past transcripts, searchable, one click to copy.
+
+| Settings — local or API engine, shortcut, auto-paste | History — search, copy, delete |
+| :---: | :---: |
+| ![Settings window](docs/settings.png) | ![History window](docs/history.png) |
 
 ## Download
 
