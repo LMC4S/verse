@@ -1,10 +1,10 @@
 # Verse — Whisper that lives in the menu bar
 
-A lightweight macOS app for voice transcription that stays out of the way: a quote mark in the menu bar, a translucent panel while recording, and finished text wherever the cursor sits. One shortcut (**⌥Space** by default, configurable) starts and ends a recording; the transcript lands on the clipboard and is pasted into the focused text field. Transcription runs on Whisper — through the OpenAI API, or fully on-device with a local MLX model. Esc cancels.
+A lightweight macOS app for voice transcription that stays out of the way: a quote mark in the menu bar, a translucent panel while recording, and finished text wherever the cursor sits. One shortcut (**⌥Space** by default, configurable) starts and ends a recording; the transcript lands on the clipboard and is pasted into the focused text field. Esc cancels. Three engines to choose from: Whisper through the OpenAI API, Whisper on-device with a local MLX model, or Apple's own on-device speech models.
 
 ![Recording panel under the menu bar](docs/hero.png)
 
-The menu bar mark shows the current state: **”** idle, a red dot recording, **…** transcribing. Past transcripts are kept in a searchable History window — click an entry to copy it.
+The menu bar mark shows the current state: **”** idle, a red dot recording, **…** transcribing. Unlike system dictation, nothing is gone after the paste: every transcript is kept in a searchable History window, with running totals for words, audio time, and API cost.
 
 ![Settings and History windows](docs/windows.png)
 
