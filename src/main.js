@@ -5,6 +5,7 @@ const {
   Notification,
   Tray,
   clipboard,
+  dialog,
   globalShortcut,
   ipcMain,
   nativeImage,
@@ -487,7 +488,7 @@ function rebuildTrayMenu() {
       click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
     },
     { type: "separator" },
-    { label: "Quit Verse", role: "quit" },
+    { label: "Quit Verse", click: () => app.quit() },
   ]);
   tray.setContextMenu(menu);
 }
@@ -776,6 +777,23 @@ ipcMain.handle("history:delete", async (_event, id) => {
 });
 
 ipcMain.handle("history:clear", async () => {
+  const entries = await loadHistory();
+  if (!entries.length) return entries;
+
+  const options = {
+    type: "warning",
+    buttons: ["Clear All", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    message: "Clear all transcripts?",
+    detail: `This permanently deletes all ${entries.length} entries from history.`,
+  };
+  const parent = historyWindow && !historyWindow.isDestroyed() ? historyWindow : null;
+  const { response } = parent
+    ? await dialog.showMessageBox(parent, options)
+    : await dialog.showMessageBox(options);
+  if (response !== 0) return entries;
+
   await saveHistory([]);
   return [];
 });
