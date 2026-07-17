@@ -15,6 +15,9 @@ final class PanelState: ObservableObject {
     @Published var doneDetail = ""
     @Published var errorMessage = "Something went wrong."
     @Published var shortcutLabel = ""
+    @Published var showPreview = false
+    @Published var previewFinal = ""
+    @Published var previewVolatile = ""
 
     func push(level: Double) {
         samples.removeFirst()
@@ -24,15 +27,22 @@ final class PanelState: ObservableObject {
     func resetMeter() {
         samples = Array(repeating: 0, count: Self.meterBarCount)
         elapsed = 0
+        previewFinal = ""
+        previewVolatile = ""
     }
 }
 
 struct RecordingPanelView: View {
     static let size = CGSize(width: 300, height: 148)
+    static let previewSize = CGSize(width: 300, height: 196)
 
     @ObservedObject var state: PanelState
     var onStop: () -> Void
     var onCancel: () -> Void
+
+    private var currentSize: CGSize {
+        state.showPreview ? Self.previewSize : Self.size
+    }
 
     var body: some View {
         ZStack {
@@ -67,34 +77,50 @@ struct RecordingPanelView: View {
                 }
             }
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(width: currentSize.width, height: currentSize.height)
         .glassEffect(.clear.interactive(), in: .rect(cornerRadius: 26))
     }
 
     private var recording: some View {
         VStack(spacing: 10) {
-            HStack {
+            HStack(spacing: 8) {
                 Circle()
                     .fill(.red)
                     .frame(width: 7, height: 7)
-                Text(timeText)
-                    .font(.system(.title3, design: .rounded).weight(.medium))
-                    .monospacedDigit()
+                Text("Recording")
+                    .font(.system(size: 13, weight: .semibold))
                 Spacer()
-                if !state.shortcutLabel.isEmpty {
-                    Text(state.shortcutLabel)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(timeText)
+                    .font(.system(size: 13, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
 
             meter
 
+            if state.showPreview {
+                (Text(state.previewFinal)
+                    + Text(state.previewVolatile).foregroundStyle(.secondary))
+                    .font(.system(size: 12))
+                    .lineSpacing(2)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, maxHeight: 44, alignment: .bottomLeading)
+            }
+
             HStack(spacing: 8) {
                 Button("Cancel", role: .cancel, action: onCancel)
                     .buttonStyle(.glass)
-                Button("Stop", action: onStop)
-                    .buttonStyle(.glassProminent)
+                Button(action: onStop) {
+                    HStack(spacing: 5) {
+                        Text("Done")
+                        if !state.shortcutLabel.isEmpty {
+                            Text(state.shortcutLabel)
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .opacity(0.7)
+                        }
+                    }
+                }
+                .buttonStyle(.glassProminent)
             }
             .controlSize(.small)
         }

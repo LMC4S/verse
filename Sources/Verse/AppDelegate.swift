@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hideWorkItem: DispatchWorkItem?
     private var activeShortcut = ""
 
+    private var liveTranscriber: AppleLiveTranscriber?
     private var settingsWindow: NSWindow?
     private var historyWindow: NSWindow?
     private lazy var settingsModel = SettingsModel()
@@ -264,7 +265,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func positionPanel() {
-        let size = RecordingPanelView.size
+        let size = panelState.showPreview
+            ? RecordingPanelView.previewSize
+            : RecordingPanelView.size
+        panel.setContentSize(size)
         var origin: NSPoint
 
         if let button = statusItem.button, let window = button.window {
@@ -304,6 +308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 showError("Allow microphone access in System Settings → Privacy & Security.")
                 return
             }
+            let settings = AppSettings.load()
             do {
                 try recorder.start()
             } catch {
@@ -311,19 +316,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             panelState.resetMeter()
+            panelState.showPreview = settings.livePreview && settings.engine == "apple"
             panelState.phase = .recording
             showPanel()
             startMeterTimer()
             registerEscapeHotKey()
             updateStatusIcon()
             rebuildMenu()
+            if panelState.showPreview {
+                startLivePreview()
+            }
         }
+    }
+
+    /// Best-effort live transcript while recording (Apple engine only).
+    private func startLivePreview() {
+        let live = AppleLiveTranscriber()
+        liveTranscriber = live
+        Task { @MainActor in
+            let started = await live.start { [weak self] isFinal, text in
+                DispatchQueue.main.async {
+                    guard let self, self.liveTranscriber === live else { return }
+                    if isFinal {
+                        self.panelState.previewFinal += text
+                        self.panelState.previewVolatile = ""
+                    } else {
+                        self.panelState.previewVolatile = text
+                    }
+                }
+            }
+            guard started, liveTranscriber === live else { return }
+            recorder.onBuffer = { [weak live] buffer in
+                live?.feed(buffer)
+            }
+        }
+    }
+
+    private func stopLivePreview() {
+        recorder.onBuffer = nil
+        liveTranscriber?.stop()
+        liveTranscriber = nil
     }
 
     private func stopRecording() {
         guard panelState.phase == .recording else { return }
         stopMeterTimer()
         unregisterEscapeHotKey()
+        stopLivePreview()
         guard let (url, durationMs) = recorder.stop() else {
             hidePanel(after: 0)
             return
@@ -340,6 +379,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard panelState.phase == .recording else { return }
         stopMeterTimer()
         unregisterEscapeHotKey()
+        stopLivePreview()
         recorder.cancel()
         panel.orderOut(nil)
         panelState.phase = .idle
@@ -352,9 +392,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         defer { try? FileManager.default.removeItem(at: url) }
         let settings = AppSettings.load()
         do {
-            let raw: String = settings.engine == "mlx"
-                ? try await MLX.transcribe(fileURL: url, model: settings.mlxModel)
-                : try await Transcriber.transcribe(fileURL: url, apiKey: settings.apiKey)
+            let raw: String = switch settings.engine {
+            case "mlx":
+                try await MLX.transcribe(fileURL: url, model: settings.mlxModel)
+            case "apple":
+                try await AppleSpeech.transcribe(fileURL: url)
+            default:
+                try await Transcriber.transcribe(fileURL: url, apiKey: settings.apiKey)
+            }
             let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else {
                 throw TranscriberError.badResponse("The transcript came back empty.")
@@ -371,14 +416,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             panelState.doneMessage = pasted ? "Pasted" : "Copied to clipboard"
             panelState.doneDetail = !pasted && settings.autoPaste
-                ? "Allow Verse under Privacy & Security → Accessibility to auto-paste."
+                ? "Allow Verse Dev under Privacy & Security → Accessibility to auto-paste."
                 : preview(text)
             panelState.phase = .done
             updateStatusIcon()
             rebuildMenu()
             hidePanel(after: 1.4)
+            if pasted {
+                Notify.post(title: "Pasted", body: preview(text))
+            } else if settings.autoPaste {
+                Notify.post(
+                    title: "Copied to clipboard",
+                    body: "To paste automatically, allow Verse Dev under System Settings → Privacy & Security → Accessibility."
+                )
+            } else {
+                Notify.post(title: "Copied to clipboard", body: preview(text))
+            }
         } catch {
             showError(error.localizedDescription)
+            Notify.post(title: "Transcription failed", body: error.localizedDescription)
         }
     }
 

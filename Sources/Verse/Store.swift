@@ -13,6 +13,8 @@ struct AppSettings {
     var mlxModel = "mlx-community/whisper-large-v3-turbo"
     var shortcut = "Alt+Space"
     var autoPaste = true
+    var notifications = true
+    var livePreview = false
 
     /// The stable Electron app's data. Read-only from this app — the dev
     /// build must never modify the shipping Verse's files.
@@ -64,6 +66,8 @@ struct AppSettings {
         settings.mlxModel = json["mlxModel"] as? String ?? settings.mlxModel
         settings.shortcut = json["shortcut"] as? String ?? settings.shortcut
         settings.autoPaste = json["autoPaste"] as? Bool ?? settings.autoPaste
+        settings.notifications = json["notifications"] as? Bool ?? settings.notifications
+        settings.livePreview = json["livePreview"] as? Bool ?? settings.livePreview
         return settings
     }
 
@@ -150,7 +154,7 @@ enum History {
         var entry: [String: Any] = [
             "id": "\(Int(Date().timeIntervalSince1970 * 1000))-\(String(format: "%06x", Int.random(in: 0..<0xFFFFFF)))",
             "text": trimmed,
-            "source": "recording.m4a",
+            "source": "recording.wav",
             "engine": engine,
             "createdAt": formatter.string(from: Date()),
         ]

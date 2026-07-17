@@ -30,8 +30,8 @@ enum Transcriber {
         var body = Data()
         func field(_ string: String) { body.append(Data(string.utf8)) }
         field("--\(boundary)\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n\(model)\r\n")
-        field("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"recording.m4a\"\r\n")
-        field("Content-Type: audio/m4a\r\n\r\n")
+        field("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"recording.wav\"\r\n")
+        field("Content-Type: audio/wav\r\n\r\n")
         body.append(try Data(contentsOf: fileURL))
         field("\r\n--\(boundary)--\r\n")
         request.httpBody = body

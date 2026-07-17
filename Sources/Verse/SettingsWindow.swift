@@ -9,6 +9,8 @@ final class SettingsModel: ObservableObject {
     @Published var engine: String
     @Published var mlxModel: String
     @Published var autoPaste: Bool
+    @Published var notifications: Bool
+    @Published var livePreview: Bool
     @Published var shortcut: String
     @Published var launchAtLogin: Bool
     @Published var mlxInstalled = false
@@ -31,6 +33,8 @@ final class SettingsModel: ObservableObject {
         engine = settings.engine
         mlxModel = settings.mlxModel
         autoPaste = settings.autoPaste
+        notifications = settings.notifications
+        livePreview = settings.livePreview
         shortcut = settings.shortcut
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
@@ -55,6 +59,14 @@ final class SettingsModel: ObservableObject {
 
     func saveAutoPaste() {
         AppSettings.save(["autoPaste": autoPaste])
+    }
+
+    func saveNotifications() {
+        AppSettings.save(["notifications": notifications])
+    }
+
+    func saveLivePreview() {
+        AppSettings.save(["livePreview": livePreview])
     }
 
     func toggleLaunchAtLogin() {
@@ -159,11 +171,9 @@ struct SettingsView: View {
             WindowHeader(title: "Verse Dev")
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    shortcutGroup
+                    recordingGroup
                     outputGroup
                     transcriptionGroup
-                    apiKeyGroup
-                    mlxGroup
                     signature
                 }
                 .padding(.horizontal, 20)
@@ -174,9 +184,9 @@ struct SettingsView: View {
         .onAppear { model.refreshMlxStatus() }
     }
 
-    private var shortcutGroup: some View {
+    private var recordingGroup: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "Shortcut")
+            SectionHeader(title: "Recording")
             HStack(spacing: 10) {
                 Text("Start / stop recording")
                     .font(.system(size: 13))
@@ -199,6 +209,17 @@ struct SettingsView: View {
             Hint(text: model.shortcutFailed
                 ? "That shortcut is taken by another app — try a different one."
                 : "Click, then press the keys you want — a function key alone (like F5) or any combo with ⌘⌥⌃⇧. Esc cancels. Press once to record, again to transcribe.")
+            HStack(spacing: 10) {
+                Text("Live transcript preview while recording")
+                    .font(.system(size: 13))
+                Spacer()
+                Toggle("", isOn: $model.livePreview)
+                    .toggleStyle(.checkbox)
+                    .labelsHidden()
+                    .onChange(of: model.livePreview) { model.saveLivePreview() }
+            }
+            .padding(.vertical, 6)
+            Hint(text: "Experimental — shows Apple's on-device transcription in the panel as you speak. Apple Speech engine only.")
         }
     }
 
@@ -216,6 +237,16 @@ struct SettingsView: View {
             }
             .padding(.vertical, 6)
             Hint(text: "The transcript is always copied to the clipboard. With this on, it is also typed into whatever text box has focus (needs Accessibility permission the first time).")
+            HStack(spacing: 10) {
+                Text("Notify when the transcript is ready")
+                    .font(.system(size: 13))
+                Spacer()
+                Toggle("", isOn: $model.notifications)
+                    .toggleStyle(.checkbox)
+                    .labelsHidden()
+                    .onChange(of: model.notifications) { model.saveNotifications() }
+            }
+            .padding(.vertical, 6)
             HStack(spacing: 10) {
                 Text("Launch at login")
                     .font(.system(size: 13))
@@ -237,6 +268,7 @@ struct SettingsView: View {
                     .font(.system(size: 13))
                 Spacer()
                 Picker("", selection: $model.engine) {
+                    Text("Apple Speech").tag("apple")
                     Text("OpenAI API").tag("openai")
                     Text("Local MLX").tag("mlx")
                 }
@@ -245,7 +277,11 @@ struct SettingsView: View {
                 .onChange(of: model.engine) { model.saveEngine() }
             }
             .padding(.vertical, 6)
-            if model.engine == "mlx" {
+
+            switch model.engine {
+            case "apple":
+                Hint(text: "Apple's on-device speech models — private, free, no setup. Uses your system language.")
+            case "mlx":
                 HStack(spacing: 10) {
                     Text("MLX model")
                         .font(.system(size: 13))
@@ -254,52 +290,39 @@ struct SettingsView: View {
                         .onSubmit { model.saveMlxModel() }
                 }
                 .padding(.vertical, 6)
-            }
-        }
-    }
-
-    private var apiKeyGroup: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "OpenAI API Key")
-            HStack(spacing: 10) {
-                SecureField("sk-…", text: $model.newKey)
-                    .fieldChrome()
-                    .onSubmit { model.saveKey() }
-                Button("Save") { model.saveKey() }
-                    .buttonStyle(VerseButtonStyle())
-                    .disabled(model.newKey.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(.vertical, 6)
-            Hint(text: model.hasKey
-                ? "A key is saved. Enter a new one to replace it."
-                : "No key saved yet.")
-        }
-    }
-
-    private var mlxGroup: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "Local MLX Engine")
-            HStack(spacing: 6) {
-                if model.mlxBusy {
-                    ProgressView().controlSize(.small)
-                }
-                Hint(text: model.mlxStatus)
-            }
-            HStack(spacing: 8) {
-                Spacer()
-                if model.mlxInstalled {
-                    Button("Remove") { model.removeMlx() }
+                HStack(spacing: 6) {
+                    if model.mlxBusy {
+                        ProgressView().controlSize(.small)
+                    }
+                    Hint(text: model.mlxStatus)
+                    Spacer()
+                    if model.mlxInstalled {
+                        Button("Remove") { model.removeMlx() }
+                            .buttonStyle(VerseButtonStyle())
+                            .disabled(model.mlxBusy)
+                    } else {
+                        Button("Install") { model.installMlx() }
+                            .buttonStyle(VerseButtonStyle())
+                            .disabled(model.mlxBusy)
+                    }
+                    Button("Open Folder") { model.openMlxFolder() }
                         .buttonStyle(VerseButtonStyle())
-                        .disabled(model.mlxBusy)
-                } else {
-                    Button("Install") { model.installMlx() }
-                        .buttonStyle(VerseButtonStyle())
-                        .disabled(model.mlxBusy)
                 }
-                Button("Open Folder") { model.openMlxFolder() }
-                    .buttonStyle(VerseButtonStyle())
+                .padding(.vertical, 6)
+            default:
+                HStack(spacing: 10) {
+                    SecureField("sk-…", text: $model.newKey)
+                        .fieldChrome()
+                        .onSubmit { model.saveKey() }
+                    Button("Save") { model.saveKey() }
+                        .buttonStyle(VerseButtonStyle())
+                        .disabled(model.newKey.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .padding(.vertical, 6)
+                Hint(text: model.hasKey
+                    ? "A key is saved. Enter a new one to replace it."
+                    : "No key saved yet.")
             }
-            .padding(.vertical, 6)
         }
     }
 

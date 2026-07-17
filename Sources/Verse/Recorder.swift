@@ -1,13 +1,25 @@
 import AVFoundation
 import Foundation
 
-/// Records the microphone to a temporary AAC file (16 kHz mono — small
-/// uploads, plenty for speech) with metering for the level display.
+/// Records the microphone to a 16 kHz mono WAV via AVAudioEngine — one format
+/// every engine accepts (OpenAI, MLX, Apple) — while exposing a live level
+/// for the meter and, optionally, converted buffers for the live preview.
 final class Recorder {
-    private var recorder: AVAudioRecorder?
-    private var startedAt: Date?
+    static let targetFormat = AVAudioFormat(
+        commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true
+    )!
 
-    var isRecording: Bool { recorder?.isRecording ?? false }
+    private let engine = AVAudioEngine()
+    private var file: AVAudioFile?
+    private var converter: AVAudioConverter?
+    private var url: URL?
+    private var startedAt: Date?
+    private var currentLevel: Double = 0
+
+    /// Receives 16 kHz mono int16 buffers on the audio thread (live preview).
+    var onBuffer: ((AVAudioPCMBuffer) -> Void)?
+
+    var isRecording: Bool { engine.isRunning }
 
     static func requestMicAccess() async -> Bool {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
@@ -19,31 +31,75 @@ final class Recorder {
 
     func start() throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("verse-\(UUID().uuidString).m4a")
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: 16_000,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderBitRateKey: 32_000,
-        ]
-        let recorder = try AVAudioRecorder(url: url, settings: settings)
-        recorder.isMeteringEnabled = true
-        guard recorder.record() else {
+            .appendingPathComponent("verse-\(UUID().uuidString).wav")
+        let input = engine.inputNode
+        let inputFormat = input.outputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
             throw NSError(domain: "Verse", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Could not start the microphone."
+                NSLocalizedDescriptionKey: "No microphone input is available."
             ])
         }
-        self.recorder = recorder
+        guard let converter = AVAudioConverter(from: inputFormat, to: Self.targetFormat) else {
+            throw NSError(domain: "Verse", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Could not prepare the audio converter."
+            ])
+        }
+        let file = try AVAudioFile(
+            forWriting: url,
+            settings: Self.targetFormat.settings,
+            commonFormat: .pcmFormatInt16,
+            interleaved: true
+        )
+
+        self.url = url
+        self.file = file
+        self.converter = converter
+
+        input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) {
+            [weak self] buffer, _ in
+            self?.process(buffer)
+        }
+        engine.prepare()
+        try engine.start()
         startedAt = Date()
     }
 
-    /// Normalized 0…1 loudness for the meter.
+    private func process(_ buffer: AVAudioPCMBuffer) {
+        // Meter level from the raw input.
+        if let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 {
+            var sum: Float = 0
+            for index in 0..<Int(buffer.frameLength) {
+                sum += samples[index] * samples[index]
+            }
+            let rms = sqrt(sum / Float(buffer.frameLength))
+            currentLevel = Double(min(1, pow(rms, 0.5) * 1.6))
+        }
+
+        // Convert to 16 kHz mono int16, write to the WAV, feed the preview.
+        guard let converter else { return }
+        let ratio = Self.targetFormat.sampleRate / buffer.format.sampleRate
+        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 16
+        guard let out = AVAudioPCMBuffer(
+            pcmFormat: Self.targetFormat, frameCapacity: capacity
+        ) else { return }
+
+        var consumed = false
+        let status = converter.convert(to: out, error: nil) { _, outStatus in
+            if consumed {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+            consumed = true
+            outStatus.pointee = .haveData
+            return buffer
+        }
+        guard status != .error, out.frameLength > 0 else { return }
+        try? file?.write(from: out)
+        onBuffer?(out)
+    }
+
     func level() -> Double {
-        guard let recorder, recorder.isRecording else { return 0 }
-        recorder.updateMeters()
-        let decibels = recorder.averagePower(forChannel: 0) // -160…0 dB
-        let floor: Float = -50
-        return Double(max(0, min(1, (decibels - floor) / -floor)))
+        currentLevel
     }
 
     func elapsed() -> TimeInterval {
@@ -51,21 +107,28 @@ final class Recorder {
         return Date().timeIntervalSince(startedAt)
     }
 
+    private func teardown() {
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        onBuffer = nil
+        converter = nil
+        file = nil // closes the WAV
+        currentLevel = 0
+    }
+
     func stop() -> (url: URL, durationMs: Int)? {
-        guard let recorder, let startedAt else { return nil }
+        guard let url, let startedAt else { return nil }
         let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-        recorder.stop()
-        let url = recorder.url
-        self.recorder = nil
+        teardown()
+        self.url = nil
         self.startedAt = nil
         return (url, durationMs)
     }
 
     func cancel() {
-        guard let recorder else { return }
-        recorder.stop()
-        recorder.deleteRecording()
-        self.recorder = nil
+        teardown()
+        if let url { try? FileManager.default.removeItem(at: url) }
+        url = nil
         startedAt = nil
     }
 }
