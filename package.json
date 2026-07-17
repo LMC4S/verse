@@ -17,8 +17,12 @@
   },
   "build": {
     "appId": "app.verse.transcriber",
+    "afterPack": "scripts/trim_electron.js",
     "productName": "Verse",
     "mac": {
+      "electronLanguages": [
+        "en"
+      ],
       "target": [
         {
           "target": "dmg",

@@ -74,6 +74,10 @@ function migrateLegacyUserData() {
 
 migrateLegacyUserData();
 
+// The UI is native vibrancy plus a small 2D canvas; software rendering covers
+// it, and skipping the GPU helper process saves a good chunk of idle memory.
+app.disableHardwareAcceleration();
+
 let tray = null;
 let panelWindow = null;
 let settingsWindow = null;
@@ -658,6 +662,7 @@ function createPanelWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,
+      spellcheck: false,
     },
   });
   panelWindow.setAlwaysOnTop(true, "status");
@@ -688,6 +693,7 @@ function openSettingsWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: false,
     },
   });
   settingsWindow.loadFile(path.join(__dirname, "settings", "index.html"));
@@ -720,6 +726,7 @@ function openHistoryWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: false,
     },
   });
   historyWindow.loadFile(path.join(__dirname, "history", "index.html"));
