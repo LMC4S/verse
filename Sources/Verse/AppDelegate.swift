@@ -67,11 +67,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
         switch panelState.phase {
         case .recording:
+            // v1's hand-drawn red tray icon, bundled from src/assets.
+            if let image = NSImage(named: "recording") {
+                image.isTemplate = false
+                return image
+            }
             let colors = NSImage.SymbolConfiguration(paletteColors: [.systemRed])
             return NSImage(
                 systemSymbolName: "record.circle.fill", accessibilityDescription: "Recording"
             )?.withSymbolConfiguration(config.applying(colors))
         case .transcribing:
+            if let image = NSImage(named: "busyTemplate") {
+                image.isTemplate = true
+                return image
+            }
             let image = NSImage(
                 systemSymbolName: "ellipsis.circle", accessibilityDescription: "Transcribing"
             )?.withSymbolConfiguration(config)

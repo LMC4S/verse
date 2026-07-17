@@ -84,9 +84,7 @@ struct RecordingPanelView: View {
     private var recording: some View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
-                Circle()
-                    .fill(.red)
-                    .frame(width: 7, height: 7)
+                PulsingDot()
                 Text("Recording")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
@@ -160,5 +158,24 @@ struct RecordingPanelView: View {
     private var timeText: String {
         let total = Int(state.elapsed)
         return String(format: "%02d:%02d", total / 60, total % 60)
+    }
+}
+
+/// v1's .record-dot: 10px #ff453a, soft glow, 1.4s ease-in-out pulse.
+private struct PulsingDot: View {
+    private static let red = Color(red: 1.0, green: 69 / 255, blue: 58 / 255)
+    private let dimmed = State(initialValue: false)
+
+    var body: some View {
+        Circle()
+            .fill(Self.red)
+            .frame(width: 10, height: 10)
+            .shadow(color: Self.red.opacity(0.8), radius: 4)
+            .opacity(dimmed.wrappedValue ? 0.4 : 1)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+                    dimmed.wrappedValue = true
+                }
+            }
     }
 }

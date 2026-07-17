@@ -7,6 +7,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Pin to the Command Line Tools: the machine's active developer dir may point
+# at an Xcode whose license isn't accepted yet, which bricks every dev tool.
+export DEVELOPER_DIR=/Library/Developer/CommandLineTools
+
 mkdir -p .build/verse
 swiftc -O -parse-as-library -swift-version 5 \
   -target arm64-apple-macos26.0 \
@@ -22,6 +26,7 @@ if [[ -f build/icon.icns ]]; then
   cp build/icon.icns "$APP/Contents/Resources/icon.icns"
 fi
 cp Support/local_mlx_transcribe.py "$APP/Contents/Resources/"
+cp Resources/*.png "$APP/Contents/Resources/"
 
 codesign --force --sign - "$APP"
 echo "✓ Built $APP"
