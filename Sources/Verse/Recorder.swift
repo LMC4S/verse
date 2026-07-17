@@ -70,11 +70,14 @@ final class SpectrumAnalyzer {
         }
     }
 
-    private var peakDb: Float = -55
+    private var peakDb: Float = -60
 
-    /// Per-bar levels 0…1, sampling the lower 70% of the spectrum like v1 —
-    /// but normalized against a tracked recent peak (fast rise, ~10 dB/s
-    /// decay) so the meter uses its full height at any mic gain.
+    /// Per-bar levels 0…1, sampling the lower 70% of the spectrum like v1.
+    /// Normalized against a tracked recent peak (fast rise, ~10 dB/s decay)
+    /// with a wide 65 dB window — voice energy sits in the low bars, and the
+    /// wide window is what lets the quieter mid/high bands dance like
+    /// WebAudio's AGC-boosted absolute mapping did in v1. Near-silence is
+    /// gated flat instead of auto-gaining the noise floor.
     func barLevels(_ barCount: Int) -> [Double] {
         lock.lock()
         defer { lock.unlock() }
@@ -82,16 +85,22 @@ final class SpectrumAnalyzer {
             let bin = Int(Float(barIndex) / Float(barCount) * Float(Self.binCount) * 0.7)
             return 20 * log10(max(smoothed[bin], 1e-7))
         }
-        peakDb = max(dbs.max() ?? -100, peakDb - 0.35, -55)
-        let floorDb = peakDb - 42
-        return dbs.map { Double(min(1, max(0, ($0 - floorDb) / 42))) }
+        peakDb = max(dbs.max() ?? -100, peakDb - 0.35, -60)
+        guard peakDb > -57 else {
+            return Array(repeating: 0, count: barCount)
+        }
+        let floorDb = peakDb - 65
+        return dbs.map { db in
+            let norm = min(1, max(0, (db - floorDb) / 65))
+            return pow(Double(norm), 0.8)
+        }
     }
 
     func reset() {
         lock.lock()
         latest = [Float](repeating: 0, count: Self.fftSize)
         smoothed = [Float](repeating: 0, count: Self.binCount)
-        peakDb = -55
+        peakDb = -60
         lock.unlock()
     }
 }
