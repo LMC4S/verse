@@ -101,6 +101,40 @@ enum Accelerator {
         return parts.joined(separator: "+")
     }
 
+    /// NSMenuItem key-equivalent representation, for right-aligned shortcut
+    /// display in the status item menu.
+    static func keyEquivalent(_ accelerator: String) -> (String, NSEvent.ModifierFlags)? {
+        var mask: NSEvent.ModifierFlags = []
+        var key: String?
+        for part in accelerator.split(separator: "+").map(String.init) {
+            switch part.lowercased() {
+            case "control", "ctrl": mask.insert(.control)
+            case "alt", "option": mask.insert(.option)
+            case "shift": mask.insert(.shift)
+            case "command", "cmd", "super", "meta": mask.insert(.command)
+            default: key = part
+            }
+        }
+        guard let key else { return nil }
+
+        let upper = key.uppercased()
+        if upper.hasPrefix("F"), let number = Int(upper.dropFirst()),
+           (1...12).contains(number),
+           let scalar = UnicodeScalar(NSF1FunctionKey + number - 1) {
+            mask.insert(.function)
+            return (String(scalar), mask)
+        }
+        switch key.lowercased() {
+        case "space": return (" ", mask)
+        case "return", "enter": return ("\r", mask)
+        default: break
+        }
+        if key.count == 1 {
+            return (key.lowercased(), mask)
+        }
+        return nil
+    }
+
     private static let namedKeys: [String: Int] = [
         "F1": kVK_F1, "F2": kVK_F2, "F3": kVK_F3, "F4": kVK_F4,
         "F5": kVK_F5, "F6": kVK_F6, "F7": kVK_F7, "F8": kVK_F8,

@@ -101,11 +101,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .transcribing: "Transcribing…"
         default: "Start Recording"
         }
-        let hint = activeShortcut.isEmpty ? "" : "  \(Accelerator.label(activeShortcut))"
         let record = NSMenuItem(
-            title: title + (panelState.phase == .transcribing ? "" : hint),
-            action: #selector(menuToggleRecording), keyEquivalent: ""
+            title: title, action: #selector(menuToggleRecording), keyEquivalent: ""
         )
+        // Display-only: status item menus are outside the key-equivalent
+        // dispatch path, so this renders "F9" without double-firing the
+        // Carbon hotkey.
+        if let (key, mask) = Accelerator.keyEquivalent(activeShortcut) {
+            record.keyEquivalent = key
+            record.keyEquivalentModifierMask = mask
+        }
         record.target = self
         record.isEnabled = panelState.phase != .transcribing
         menu.addItem(record)
@@ -146,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 resizable: true,
                 view: HistoryView(model: historyModel)
             )
+            historyWindow?.minSize = NSSize(width: 380, height: 400)
         }
         presentWindow(historyWindow)
     }
@@ -157,7 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             settingsWindow = makeWindow(
                 title: "Verse Settings",
-                size: NSSize(width: 440, height: 520),
+                size: NSSize(width: 460, height: 680),
                 resizable: false,
                 view: SettingsView(model: settingsModel)
             )
@@ -177,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         window.title = title
+        window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         window.isMovableByWindowBackground = true
