@@ -66,21 +66,28 @@ final class SpectrumAnalyzer {
         }
     }
 
-    /// Per-bar levels 0…1, sampling the lower 70% of the spectrum like v1.
+    private var peakDb: Float = -55
+
+    /// Per-bar levels 0…1, sampling the lower 70% of the spectrum like v1 —
+    /// but normalized against a tracked recent peak (fast rise, ~10 dB/s
+    /// decay) so the meter uses its full height at any mic gain.
     func barLevels(_ barCount: Int) -> [Double] {
         lock.lock()
         defer { lock.unlock() }
-        return (0..<barCount).map { barIndex in
+        let dbs = (0..<barCount).map { barIndex -> Float in
             let bin = Int(Float(barIndex) / Float(barCount) * Float(Self.binCount) * 0.7)
-            let db = 20 * log10(max(smoothed[bin], 1e-7))
-            return Double(min(1, max(0, (db + 100) / 70)))
+            return 20 * log10(max(smoothed[bin], 1e-7))
         }
+        peakDb = max(dbs.max() ?? -100, peakDb - 0.35, -55)
+        let floorDb = peakDb - 42
+        return dbs.map { Double(min(1, max(0, ($0 - floorDb) / 42))) }
     }
 
     func reset() {
         lock.lock()
         latest = [Float](repeating: 0, count: Self.fftSize)
         smoothed = [Float](repeating: 0, count: Self.binCount)
+        peakDb = -55
         lock.unlock()
     }
 }
