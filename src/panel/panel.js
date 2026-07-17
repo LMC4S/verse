@@ -113,13 +113,14 @@ function showError(message) {
   finishLater(2600);
 }
 
-async function transcribe(file) {
+async function transcribe(file, durationMs) {
   setState("transcribing");
   try {
     const audio = {
       bytes: new Uint8Array(await file.arrayBuffer()),
       fileName: file.name,
       mimeType: file.type,
+      durationMs,
     };
     await window.verse.completeRecording(audio);
     body.dataset.state = "done";
@@ -150,6 +151,7 @@ async function startRecording() {
     });
 
     mediaRecorder.addEventListener("stop", async () => {
+      const durationMs = Date.now() - startedAt;
       stream.getTracks().forEach((track) => track.stop());
       stopTimer();
       stopMeter();
@@ -166,7 +168,7 @@ async function startRecording() {
       const blob = new Blob(recordedChunks, { type });
       recordedChunks = [];
       const file = new File([blob], `recording-${Date.now()}.${extension}`, { type });
-      await transcribe(file);
+      await transcribe(file, durationMs);
     });
 
     mediaRecorder.start();

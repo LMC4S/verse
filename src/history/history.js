@@ -21,6 +21,33 @@ function formatTime(iso) {
   return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
+const CJK_PATTERN = /[぀-ヿ㐀-䶿一-鿿가-힯]/gu;
+
+function wordCount(text) {
+  const cjkCharacters = (text.match(CJK_PATTERN) || []).length;
+  const spacedWords = (text.replace(CJK_PATTERN, " ").match(/\S+/gu) || []).length;
+  return cjkCharacters + spacedWords;
+}
+
+function formatTotalDuration(ms) {
+  const totalSeconds = Math.round(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours) return `${hours}h ${minutes}m`;
+  if (minutes) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function statsLine(items) {
+  const parts = [`${items.length} transcript${items.length === 1 ? "" : "s"}`];
+  const words = items.reduce((sum, entry) => sum + wordCount(entry.text), 0);
+  parts.push(`${words.toLocaleString()} word${words === 1 ? "" : "s"}`);
+  const audioMs = items.reduce((sum, entry) => sum + (entry.durationMs || 0), 0);
+  if (audioMs > 0) parts.push(`${formatTotalDuration(audioMs)} of audio`);
+  return parts.join(" · ");
+}
+
 function render() {
   const query = searchInput.value.trim().toLowerCase();
   const visible = query
@@ -32,7 +59,7 @@ function render() {
   emptyText.textContent = query ? "No matches." : "No transcripts yet.";
   countText.textContent = query
     ? `${visible.length} of ${entries.length} transcripts`
-    : `${entries.length} transcript${entries.length === 1 ? "" : "s"}`;
+    : statsLine(entries);
 
   for (const entry of visible) {
     const item = document.createElement("li");

@@ -88,15 +88,17 @@ async function saveHistory(entries) {
   await fs.writeFile(historyPath(), JSON.stringify(entries, null, 2) + "\n", "utf8");
 }
 
-async function addHistoryEntry({ text, source, engine }) {
+async function addHistoryEntry({ text, source, engine, durationMs }) {
   const trimmed = String(text || "").trim();
   if (!trimmed) return null;
+  const duration = Number(durationMs);
   const entry = {
     id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     text: trimmed,
     source: String(source || ""),
     engine: String(engine || ""),
     createdAt: new Date().toISOString(),
+    ...(Number.isFinite(duration) && duration > 0 ? { durationMs: Math.round(duration) } : {}),
   };
   const entries = await loadHistory();
   entries.unshift(entry);
@@ -805,6 +807,7 @@ ipcMain.handle("recorder:complete", async (_event, audio) => {
       text,
       source: audio?.fileName || "recording",
       engine: settings.engine,
+      durationMs: audio?.durationMs,
     }).catch(() => {});
 
     let pasted = false;
