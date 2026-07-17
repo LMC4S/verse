@@ -74,9 +74,13 @@ final class SettingsModel: ObservableObject {
         Task { @MainActor in
             let installed = await MLX.isInstalled()
             mlxInstalled = installed
-            mlxStatus = installed
-                ? "Installed at \(MLX.root.path)."
-                : "Downloads a private Python environment with mlx-whisper (~1 GB with a model)."
+            mlxStatus = if installed {
+                MLX.isSharedWithV1
+                    ? "Using Verse 1's installed engine (read-only)."
+                    : "Installed at \(MLX.root.path)."
+            } else {
+                "Downloads a private Python environment with mlx-whisper (~1 GB with a model)."
+            }
         }
     }
 
@@ -97,6 +101,10 @@ final class SettingsModel: ObservableObject {
     }
 
     func removeMlx() {
+        guard !MLX.isSharedWithV1 else {
+            mlxStatus = "This engine belongs to Verse 1 — manage it there."
+            return
+        }
         try? MLX.remove()
         refreshMlxStatus()
     }
@@ -148,7 +156,7 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            WindowHeader(title: "Verse")
+            WindowHeader(title: "Verse Dev")
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     shortcutGroup

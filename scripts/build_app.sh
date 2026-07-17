@@ -13,7 +13,7 @@ swiftc -O -parse-as-library -swift-version 5 \
   Sources/Verse/*.swift \
   -o .build/verse/Verse
 
-APP=dist/Verse.app
+APP="dist/Verse Dev.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/verse/Verse "$APP/Contents/MacOS/Verse"

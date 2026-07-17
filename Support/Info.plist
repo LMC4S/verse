@@ -5,9 +5,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>app.verse.native</string>
 	<key>CFBundleName</key>
-	<string>Verse</string>
+	<string>Verse Dev</string>
 	<key>CFBundleDisplayName</key>
-	<string>Verse</string>
+	<string>Verse Dev</string>
 	<key>CFBundleExecutable</key>
 	<string>Verse</string>
 	<key>CFBundlePackageType</key>

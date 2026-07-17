@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var demoStart = Date()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppSettings.seedFromV1IfNeeded()
         makeStatusItem()
         makePanel()
         registerToggleShortcut()
@@ -76,8 +77,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             image?.isTemplate = true
             return image
         default:
+            // Waveform, not the quote mark — the quote belongs to stable
+            // Verse; the dev build must be tellable apart at a glance.
             let image = NSImage(
-                systemSymbolName: "quote.opening", accessibilityDescription: "Verse"
+                systemSymbolName: "waveform", accessibilityDescription: "Verse Dev"
             )?.withSymbolConfiguration(config)
             image?.isTemplate = true
             return image
@@ -87,9 +90,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateStatusIcon() {
         statusItem.button?.image = statusImage()
         statusItem.button?.toolTip = switch panelState.phase {
-        case .recording: "Verse — recording"
-        case .transcribing: "Verse — transcribing"
-        default: "Verse"
+        case .recording: "Verse Dev — recording"
+        case .transcribing: "Verse Dev — transcribing"
+        default: "Verse Dev"
         }
     }
 
@@ -131,7 +134,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         menu.addItem(NSMenuItem(
-            title: "Quit Verse", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"
+            title: "Quit Verse Dev",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
         ))
 
         menu.autoenablesItems = false

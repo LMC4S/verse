@@ -14,9 +14,35 @@ struct AppSettings {
     var shortcut = "Alt+Space"
     var autoPaste = true
 
-    static var dataDirectory: URL {
+    /// The stable Electron app's data. Read-only from this app — the dev
+    /// build must never modify the shipping Verse's files.
+    static var v1Directory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Verse")
+    }
+
+    static var dataDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("VerseDev")
+    }
+
+    /// First launch: copy the v1 settings so the API key and preferences
+    /// carry over, but take F10 so the stable app keeps F9. History starts
+    /// empty — both apps writing one history.json invites clobbering.
+    static func seedFromV1IfNeeded() {
+        let fm = FileManager.default
+        let v1Settings = v1Directory.appendingPathComponent("settings.json")
+        guard !fm.fileExists(atPath: fileURL.path),
+              let data = try? Data(contentsOf: v1Settings),
+              var json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return }
+        json["shortcut"] = "F10"
+        try? fm.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+        if let out = try? JSONSerialization.data(
+            withJSONObject: json, options: [.prettyPrinted, .sortedKeys]
+        ) {
+            try? out.write(to: fileURL)
+        }
     }
 
     static var fileURL: URL {

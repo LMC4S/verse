@@ -3,8 +3,27 @@ import Foundation
 /// Local transcription via mlx-whisper, sharing the venv that Verse 1.x
 /// installs under ~/Library/Application Support/Verse/local-mlx.
 enum MLX {
-    static var root: URL {
+    private static var devRoot: URL {
         AppSettings.dataDirectory.appendingPathComponent("local-mlx")
+    }
+
+    private static var v1Root: URL {
+        AppSettings.v1Directory.appendingPathComponent("local-mlx")
+    }
+
+    /// Reuses the ~1 GB engine that Verse 1.x installed, if present —
+    /// transcription only reads and executes it. Fresh installs go to the
+    /// dev directory so v1's copy is never written to.
+    static var isSharedWithV1: Bool {
+        !FileManager.default.fileExists(
+            atPath: devRoot.appendingPathComponent("venv/bin/python3").path
+        ) && FileManager.default.fileExists(
+            atPath: v1Root.appendingPathComponent("venv/bin/python3").path
+        )
+    }
+
+    static var root: URL {
+        isSharedWithV1 ? v1Root : devRoot
     }
 
     static var venvPython: URL {
@@ -81,6 +100,7 @@ enum MLX {
     }
 
     static func install(progress: @escaping @Sendable (String) -> Void) async throws {
+        guard !isSharedWithV1 else { return } // never write into v1's engine
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: venvPython.path) {
             progress("Creating Python environment…")
@@ -94,7 +114,8 @@ enum MLX {
     }
 
     static func remove() throws {
-        try FileManager.default.removeItem(at: root)
+        guard !isSharedWithV1 else { return } // v1's engine is managed by v1
+        try FileManager.default.removeItem(at: devRoot)
     }
 
     static func transcribe(fileURL: URL, model: String) async throws -> String {
