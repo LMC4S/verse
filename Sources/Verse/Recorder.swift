@@ -1,5 +1,89 @@
+import Accelerate
 import AVFoundation
 import Foundation
+
+/// WebAudio-style spectrum analyser (the Electron panel used AnalyserNode):
+/// 512-point FFT, Blackman window, 0.75 smoothing, -100…-30 dB range.
+/// Written from the audio thread, read from the UI timer.
+final class SpectrumAnalyzer {
+    static let fftSize = 512
+    static let binCount = fftSize / 2
+
+    private let fftSetup = vDSP_create_fftsetup(9, FFTRadix(kFFTRadix2))!
+    private var window = [Float](repeating: 0, count: fftSize)
+    private var latest = [Float](repeating: 0, count: fftSize)
+    private var smoothed = [Float](repeating: 0, count: binCount)
+    private let lock = NSLock()
+
+    init() {
+        vDSP_blkman_window(&window, vDSP_Length(Self.fftSize), 0)
+    }
+
+    deinit {
+        vDSP_destroy_fftsetup(fftSetup)
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        guard let int16Data = buffer.int16ChannelData?[0] else { return }
+        let count = Int(buffer.frameLength)
+        guard count > 0 else { return }
+
+        lock.lock()
+        defer { lock.unlock() }
+
+        if count >= Self.fftSize {
+            for index in 0..<Self.fftSize {
+                latest[index] = Float(int16Data[count - Self.fftSize + index]) / 32768
+            }
+        } else {
+            latest.removeFirst(count)
+            for index in 0..<count {
+                latest.append(Float(int16Data[index]) / 32768)
+            }
+        }
+
+        var windowed = [Float](repeating: 0, count: Self.fftSize)
+        vDSP_vmul(latest, 1, window, 1, &windowed, 1, vDSP_Length(Self.fftSize))
+
+        var real = [Float](repeating: 0, count: Self.binCount)
+        var imag = [Float](repeating: 0, count: Self.binCount)
+        for index in 0..<Self.binCount {
+            real[index] = windowed[2 * index]
+            imag[index] = windowed[2 * index + 1]
+        }
+        real.withUnsafeMutableBufferPointer { realPtr in
+            imag.withUnsafeMutableBufferPointer { imagPtr in
+                var split = DSPSplitComplex(
+                    realp: realPtr.baseAddress!, imagp: imagPtr.baseAddress!
+                )
+                vDSP_fft_zrip(fftSetup, &split, 1, 9, FFTDirection(FFT_FORWARD))
+            }
+        }
+        for index in 0..<Self.binCount {
+            let magnitude = sqrt(real[index] * real[index] + imag[index] * imag[index])
+                / Float(Self.fftSize)
+            smoothed[index] = 0.75 * smoothed[index] + 0.25 * magnitude
+        }
+    }
+
+    /// Per-bar levels 0…1, sampling the lower 70% of the spectrum like v1.
+    func barLevels(_ barCount: Int) -> [Double] {
+        lock.lock()
+        defer { lock.unlock() }
+        return (0..<barCount).map { barIndex in
+            let bin = Int(Float(barIndex) / Float(barCount) * Float(Self.binCount) * 0.7)
+            let db = 20 * log10(max(smoothed[bin], 1e-7))
+            return Double(min(1, max(0, (db + 100) / 70)))
+        }
+    }
+
+    func reset() {
+        lock.lock()
+        latest = [Float](repeating: 0, count: Self.fftSize)
+        smoothed = [Float](repeating: 0, count: Self.binCount)
+        lock.unlock()
+    }
+}
 
 /// Records the microphone to a 16 kHz mono WAV via AVAudioEngine — one format
 /// every engine accepts (OpenAI, MLX, Apple) — while exposing a live level
@@ -14,7 +98,7 @@ final class Recorder {
     private var converter: AVAudioConverter?
     private var url: URL?
     private var startedAt: Date?
-    private var currentLevel: Double = 0
+    let spectrum = SpectrumAnalyzer()
 
     /// Receives 16 kHz mono int16 buffers on the audio thread (live preview).
     var onBuffer: ((AVAudioPCMBuffer) -> Void)?
@@ -65,16 +149,6 @@ final class Recorder {
     }
 
     private func process(_ buffer: AVAudioPCMBuffer) {
-        // Meter level from the raw input.
-        if let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 {
-            var sum: Float = 0
-            for index in 0..<Int(buffer.frameLength) {
-                sum += samples[index] * samples[index]
-            }
-            let rms = sqrt(sum / Float(buffer.frameLength))
-            currentLevel = Double(min(1, pow(rms, 0.5) * 1.6))
-        }
-
         // Convert to 16 kHz mono int16, write to the WAV, feed the preview.
         guard let converter else { return }
         let ratio = Self.targetFormat.sampleRate / buffer.format.sampleRate
@@ -95,11 +169,8 @@ final class Recorder {
         }
         guard status != .error, out.frameLength > 0 else { return }
         try? file?.write(from: out)
+        spectrum.append(out)
         onBuffer?(out)
-    }
-
-    func level() -> Double {
-        currentLevel
     }
 
     func elapsed() -> TimeInterval {
@@ -113,7 +184,7 @@ final class Recorder {
         onBuffer = nil
         converter = nil
         file = nil // closes the WAV
-        currentLevel = 0
+        spectrum.reset()
     }
 
     func stop() -> (url: URL, durationMs: Int)? {

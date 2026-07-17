@@ -244,6 +244,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isMovable = false
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
+        // v1's panel is a dark HUD (Electron vibrancy: "hud"); render the
+        // glass dark regardless of the system appearance.
+        panel.appearance = NSAppearance(named: .darkAqua)
 
         let view = RecordingPanelView(
             state: panelState,
@@ -473,11 +476,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 if self.demoMode {
                     let t = Date().timeIntervalSince(self.demoStart)
-                    let level = 0.18 + 0.5 * abs(sin(t * 2.6)) + Double.random(in: 0...0.18)
-                    self.panelState.push(level: min(1, level))
+                    self.panelState.samples = (0..<PanelState.meterBarCount).map { bar in
+                        let wave = abs(sin(t * 3 + Double(bar) * 0.45))
+                        return min(1, 0.12 + 0.6 * wave * Double.random(in: 0.5...1))
+                    }
                     self.panelState.elapsed = t
                 } else {
-                    self.panelState.push(level: self.recorder.level())
+                    self.panelState.samples = self.recorder.spectrum
+                        .barLevels(PanelState.meterBarCount)
                     self.panelState.elapsed = self.recorder.elapsed()
                 }
             }
