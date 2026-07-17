@@ -44,6 +44,7 @@ const HISTORY_LIMIT = 200;
 
 const PANEL_WIDTH = 300;
 const PANEL_HEIGHT = 148;
+const PANEL_HEIGHT_PREVIEW = 196;
 
 // The app was renamed from "whisper-electron" to "Verse"; adopt the old
 // data directory (settings, history, local MLX engine) on first launch.
@@ -138,6 +139,7 @@ async function loadSettings() {
       shortcut: settings.shortcut || DEFAULT_SHORTCUT,
       autoPaste: settings.autoPaste !== false,
       notifications: settings.notifications !== false,
+      livePreview: settings.livePreview !== false,
     };
   } catch {
     return {
@@ -148,6 +150,7 @@ async function loadSettings() {
       shortcut: DEFAULT_SHORTCUT,
       autoPaste: true,
       notifications: true,
+      livePreview: true,
     };
   }
 }
@@ -200,6 +203,10 @@ function localMlxScriptPath() {
 
 function appleHelperPath() {
   return unpackedResourcePath("src", "bin", "verse-apple-transcribe");
+}
+
+function appleStreamPath() {
+  return unpackedResourcePath("src", "bin", "verse-apple-stream");
 }
 
 function localEngineRoot() {
@@ -423,6 +430,7 @@ function publicSettings(settings) {
     shortcut: activeShortcut || settings.shortcut,
     autoPaste: settings.autoPaste,
     notifications: settings.notifications,
+    livePreview: settings.livePreview,
     micKeyEnabled: micKeyEnabled(),
     version: app.getVersion(),
   };
@@ -741,16 +749,75 @@ async function notify(title, body) {
 
 // --- Recording state machine ------------------------------------------------
 
+// --- Live transcript preview (Apple SpeechAnalyzer, best effort) ----------
+
+let previewProcess = null;
+
+function startPreview() {
+  if (previewProcess || !fsSync.existsSync(appleStreamPath())) return false;
+  try {
+    previewProcess = spawn(appleStreamPath(), [], { env: process.env });
+  } catch {
+    previewProcess = null;
+    return false;
+  }
+  const child = previewProcess;
+  let pending = "";
+  child.stdout.on("data", (chunk) => {
+    pending += chunk.toString();
+    const lines = pending.split("\n");
+    pending = lines.pop();
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const event = JSON.parse(line);
+        if (event.type === "volatile" || event.type === "final") {
+          sendPanel("preview:text", { kind: event.type, text: event.text });
+        }
+      } catch {
+        // Not JSON — ignore.
+      }
+    }
+  });
+  child.on("error", () => {
+    if (previewProcess === child) previewProcess = null;
+  });
+  child.on("close", () => {
+    if (previewProcess === child) previewProcess = null;
+  });
+  return true;
+}
+
+function stopPreview() {
+  if (!previewProcess) return;
+  const child = previewProcess;
+  previewProcess = null;
+  try {
+    child.stdin.end();
+  } catch {}
+  setTimeout(() => child.kill(), 400);
+}
+
+ipcMain.on("preview:audio", (_event, chunk) => {
+  if (!previewProcess) return;
+  try {
+    previewProcess.stdin.write(Buffer.from(chunk));
+  } catch {}
+});
+
 async function startRecording() {
   if (recorderState !== "idle" || !panelWindow) return;
   const settings = await loadSettings();
   if (recorderState !== "idle") return;
+  const preview = settings.livePreview !== false && startPreview();
+  panelWindow.setContentSize(PANEL_WIDTH, preview ? PANEL_HEIGHT_PREVIEW : PANEL_HEIGHT);
   positionPanel();
   panelWindow.showInactive();
   sendPanel("recorder:command", {
     action: "start",
     shortcut: activeShortcut,
     wav: settings.engine === "apple",
+    preview,
   });
 }
 
@@ -786,6 +853,7 @@ function setRecorderState(state) {
   const next = state === "recording" || state === "transcribing" ? state : "idle";
   if (next === recorderState) return;
   recorderState = next;
+  if (next !== "recording") stopPreview();
   updateTrayIcon();
   updateEscapeShortcut();
   rebuildTrayMenu();
@@ -906,6 +974,11 @@ ipcMain.handle("settings:saveAutoPaste", async (_event, enabled) => {
 
 ipcMain.handle("settings:saveNotifications", async (_event, enabled) => {
   const settings = await saveSettings({ notifications: Boolean(enabled) });
+  return publicSettings(settings);
+});
+
+ipcMain.handle("settings:saveLivePreview", async (_event, enabled) => {
+  const settings = await saveSettings({ livePreview: Boolean(enabled) });
   return publicSettings(settings);
 });
 

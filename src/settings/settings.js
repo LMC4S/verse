@@ -2,6 +2,7 @@ const shortcutButton = document.querySelector("#shortcutButton");
 const micKeyToggle = document.querySelector("#micKeyToggle");
 const autoPasteToggle = document.querySelector("#autoPasteToggle");
 const notifyToggle = document.querySelector("#notifyToggle");
+const livePreviewToggle = document.querySelector("#livePreviewToggle");
 const engineSelect = document.querySelector("#engineSelect");
 const openaiSection = document.querySelector("#openaiSection");
 const mlxSection = document.querySelector("#mlxSection");
@@ -62,6 +63,7 @@ function applySettings(settings) {
   micKeyToggle.checked = Boolean(settings.micKeyEnabled);
   autoPasteToggle.checked = Boolean(settings.autoPaste);
   notifyToggle.checked = settings.notifications !== false;
+  livePreviewToggle.checked = settings.livePreview !== false;
 
   engineSelect.value = settings.engine || "openai";
   mlxModelInput.value = settings.mlxModel || "";
@@ -226,6 +228,16 @@ autoPasteToggle.addEventListener("change", async () => {
     const settings = await window.verse.saveAutoPaste(autoPasteToggle.checked);
     applySettings(settings);
     setStatus(settings.autoPaste ? "Auto-paste on." : "Auto-paste off — clipboard only.");
+  } catch (error) {
+    setStatus(cleanErrorMessage(error));
+  }
+});
+
+livePreviewToggle.addEventListener("change", async () => {
+  try {
+    const settings = await window.verse.saveLivePreview(livePreviewToggle.checked);
+    applySettings(settings);
+    setStatus(settings.livePreview ? "Live preview on." : "Live preview off.");
   } catch (error) {
     setStatus(cleanErrorMessage(error));
   }

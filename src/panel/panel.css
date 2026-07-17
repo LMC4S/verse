@@ -95,6 +95,30 @@ body[data-state="error"] .view-error {
   display: block;
 }
 
+.preview {
+  display: none;
+  height: 44px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+  user-select: none;
+}
+
+body.preview-on[data-state="recording"] .preview {
+  display: block;
+}
+
+body.preview-on #meter {
+  height: 22px;
+}
+
+.preview #previewVolatile {
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: underline dotted rgba(255, 255, 255, 0.4);
+  text-underline-offset: 3px;
+}
+
 .bottom {
   display: flex;
   align-items: center;

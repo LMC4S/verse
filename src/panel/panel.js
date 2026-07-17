@@ -1,4 +1,7 @@
 const body = document.body;
+const previewText = document.querySelector("#previewText");
+const previewFinal = document.querySelector("#previewFinal");
+const previewVolatile = document.querySelector("#previewVolatile");
 const timerText = document.querySelector("#timer");
 const meterCanvas = document.querySelector("#meter");
 const meterContext = meterCanvas.getContext("2d");
@@ -11,6 +14,8 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let cancelled = false;
 let wantsWav = false;
+let previewOn = false;
+let previewContext = null;
 let startedAt = 0;
 let timer = null;
 let audioContext = null;
@@ -133,6 +138,52 @@ function startMeter(stream) {
   meterFrame = window.requestAnimationFrame(draw);
 }
 
+// --- Live transcript preview: stream 16 kHz PCM to the main process --------
+
+function startPreviewPump(stream) {
+  previewFinal.textContent = "";
+  previewVolatile.textContent = "";
+  previewContext = new AudioContext({ sampleRate: 16000 });
+  const source = previewContext.createMediaStreamSource(stream);
+  const processor = previewContext.createScriptProcessor(4096, 1, 1);
+  const mute = previewContext.createGain();
+  mute.gain.value = 0;
+  processor.onaudioprocess = (event) => {
+    const samples = event.inputBuffer.getChannelData(0);
+    const pcm = new Int16Array(samples.length);
+    for (let i = 0; i < samples.length; i += 1) {
+      const sample = Math.max(-1, Math.min(1, samples[i]));
+      pcm[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+    }
+    window.verse.sendPreviewAudio(pcm.buffer);
+  };
+  source.connect(processor);
+  processor.connect(mute);
+  mute.connect(previewContext.destination);
+}
+
+function stopPreviewPump() {
+  if (previewContext) {
+    previewContext.close().catch(() => {});
+    previewContext = null;
+  }
+}
+
+function appendPreview(kind, text) {
+  if (!previewOn || !text) return;
+  if (kind === "final") {
+    const joiner = previewFinal.textContent && !/^\s/u.test(text) ? " " : "";
+    previewFinal.textContent += joiner + text;
+    previewVolatile.textContent = "";
+  } else {
+    const joiner = previewFinal.textContent && !/^\s/u.test(text) ? " " : "";
+    previewVolatile.textContent = joiner + text;
+  }
+  previewText.scrollTop = previewText.scrollHeight;
+}
+
+window.verse.onPreviewText(({ kind, text }) => appendPreview(kind, text));
+
 function stopMeter() {
   window.cancelAnimationFrame(meterFrame);
   meterFrame = null;
@@ -201,6 +252,7 @@ async function startRecording() {
       stream.getTracks().forEach((track) => track.stop());
       stopTimer();
       stopMeter();
+      stopPreviewPump();
 
       if (cancelled) {
         recordedChunks = [];
@@ -230,6 +282,13 @@ async function startRecording() {
     setState("recording");
     startTimer();
     startMeter(stream);
+    if (previewOn) {
+      try {
+        startPreviewPump(stream);
+      } catch {
+        // Preview is best effort; recording continues without it.
+      }
+    }
   } catch (error) {
     showError(error?.message || "Microphone access was blocked.");
   }
@@ -257,10 +316,12 @@ function shortcutLabel(accelerator) {
     .replaceAll("+", "");
 }
 
-window.verse.onRecorderCommand(({ action, shortcut, wav }) => {
+window.verse.onRecorderCommand(({ action, shortcut, wav, preview }) => {
   if (shortcut) shortcutHint.textContent = shortcutLabel(shortcut);
   if (action === "start") {
     wantsWav = Boolean(wav);
+    previewOn = Boolean(preview);
+    body.classList.toggle("preview-on", previewOn);
     startRecording();
   }
   if (action === "stop") stopRecording();
