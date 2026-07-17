@@ -25,6 +25,21 @@ const DEFAULT_MLX_MODEL = "mlx-community/whisper-large-v3-turbo";
 const DEFAULT_SHORTCUT = "Alt+Space";
 const FALLBACK_SHORTCUT = "Control+Alt+Space";
 
+// 🎤 key option: remap the dictation key (consumer usage 0xCF) to F13 with
+// hidutil, so it becomes a bindable plain key. A LaunchAgent reapplies the
+// mapping at login; disabling removes both.
+const MIC_KEY_SHORTCUT = "F13";
+const MIC_KEY_AGENT_LABEL = "app.verse.mic-key";
+const MIC_KEY_MAPPING = JSON.stringify({
+  UserKeyMapping: [
+    {
+      HIDKeyboardModifierMappingSrc: 0xc000000cf,
+      HIDKeyboardModifierMappingDst: 0x700000068,
+    },
+  ],
+});
+const MIC_KEY_MAPPING_OFF = JSON.stringify({ UserKeyMapping: [] });
+
 const HISTORY_LIMIT = 200;
 
 const PANEL_WIDTH = 300;
@@ -354,6 +369,50 @@ async function ensureLocalEngineReady() {
   return status;
 }
 
+function micKeyAgentPath() {
+  return path.join(os.homedir(), "Library", "LaunchAgents", `${MIC_KEY_AGENT_LABEL}.plist`);
+}
+
+function micKeyEnabled() {
+  return fsSync.existsSync(micKeyAgentPath());
+}
+
+function micKeyAgentPlist() {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${MIC_KEY_AGENT_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/hidutil</string>
+    <string>property</string>
+    <string>--set</string>
+    <string>${MIC_KEY_MAPPING.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>
+`;
+}
+
+async function setMicKey(enabled) {
+  if (enabled) {
+    await runProcess("/usr/bin/hidutil", ["property", "--set", MIC_KEY_MAPPING], {
+      env: process.env,
+    });
+    await fs.mkdir(path.dirname(micKeyAgentPath()), { recursive: true });
+    await fs.writeFile(micKeyAgentPath(), micKeyAgentPlist(), "utf8");
+  } else {
+    await runProcess("/usr/bin/hidutil", ["property", "--set", MIC_KEY_MAPPING_OFF], {
+      env: process.env,
+    });
+    await fs.rm(micKeyAgentPath(), { force: true });
+  }
+}
+
 function publicSettings(settings) {
   return {
     hasApiKey: Boolean(settings.apiKey),
@@ -361,6 +420,7 @@ function publicSettings(settings) {
     mlxModel: settings.mlxModel,
     shortcut: activeShortcut || settings.shortcut,
     autoPaste: settings.autoPaste,
+    micKeyEnabled: micKeyEnabled(),
     version: app.getVersion(),
   };
 }
@@ -768,6 +828,35 @@ ipcMain.handle("settings:saveShortcut", async (_event, accelerator) => {
   activeShortcut = next;
   const settings = await saveSettings({ shortcut: next });
   rebuildTrayMenu();
+  return publicSettings(settings);
+});
+
+async function rebindShortcut(accelerator) {
+  if (activeShortcut) globalShortcut.unregister(activeShortcut);
+  let registered = false;
+  try {
+    registered = globalShortcut.register(accelerator, () => toggleRecording());
+  } catch {
+    registered = false;
+  }
+  if (!registered) {
+    if (activeShortcut) globalShortcut.register(activeShortcut, () => toggleRecording());
+    throw new Error(`Could not register ${shortcutLabel(accelerator)}.`);
+  }
+  activeShortcut = accelerator;
+  const settings = await saveSettings({ shortcut: accelerator });
+  rebuildTrayMenu();
+  return settings;
+}
+
+ipcMain.handle("micKey:set", async (_event, enabled) => {
+  await setMicKey(Boolean(enabled));
+  let settings = await loadSettings();
+  if (enabled) {
+    settings = await rebindShortcut(MIC_KEY_SHORTCUT);
+  } else if (settings.shortcut === MIC_KEY_SHORTCUT) {
+    settings = await rebindShortcut(DEFAULT_SHORTCUT);
+  }
   return publicSettings(settings);
 });
 

@@ -1,4 +1,5 @@
 const shortcutButton = document.querySelector("#shortcutButton");
+const micKeyToggle = document.querySelector("#micKeyToggle");
 const autoPasteToggle = document.querySelector("#autoPasteToggle");
 const engineSelect = document.querySelector("#engineSelect");
 const mlxModelRow = document.querySelector("#mlxModelRow");
@@ -47,7 +48,13 @@ function applySettings(settings) {
   apiKeyStatus.textContent = settings.hasApiKey
     ? "A key is saved. Enter a new one to replace it."
     : "No key saved yet.";
-  if (settings.shortcut) shortcutButton.textContent = shortcutLabel(settings.shortcut);
+  if (settings.shortcut) {
+    shortcutButton.textContent =
+      settings.micKeyEnabled && settings.shortcut === "F13"
+        ? "🎤 (F13)"
+        : shortcutLabel(settings.shortcut);
+  }
+  micKeyToggle.checked = Boolean(settings.micKeyEnabled);
   autoPasteToggle.checked = Boolean(settings.autoPaste);
   if (settings.version) {
     document.querySelector("#versionText").textContent = settings.version;
@@ -181,6 +188,24 @@ window.addEventListener(
   },
   true
 );
+
+micKeyToggle.addEventListener("change", async () => {
+  micKeyToggle.disabled = true;
+  try {
+    const settings = await window.verse.setMicKey(micKeyToggle.checked);
+    applySettings(settings);
+    setStatus(
+      settings.micKeyEnabled
+        ? "The 🎤 key now starts recording."
+        : "The 🎤 key is back to Apple Dictation."
+    );
+  } catch (error) {
+    micKeyToggle.checked = !micKeyToggle.checked;
+    setStatus(error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/u, ""));
+  } finally {
+    micKeyToggle.disabled = false;
+  }
+});
 
 autoPasteToggle.addEventListener("change", async () => {
   try {

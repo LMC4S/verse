@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("verse", {
   saveTranscriptionSettings: (payload) => ipcRenderer.invoke("settings:saveTranscription", payload),
   saveShortcut: (accelerator) => ipcRenderer.invoke("settings:saveShortcut", accelerator),
   saveAutoPaste: (enabled) => ipcRenderer.invoke("settings:saveAutoPaste", enabled),
+  setMicKey: (enabled) => ipcRenderer.invoke("micKey:set", enabled),
   getLocalEngineStatus: () => ipcRenderer.invoke("localEngine:status"),
   installLocalEngine: () => ipcRenderer.invoke("localEngine:install"),
   removeLocalEngine: () => ipcRenderer.invoke("localEngine:remove"),
