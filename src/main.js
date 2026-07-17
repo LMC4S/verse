@@ -354,6 +354,7 @@ function publicSettings(settings) {
     mlxModel: settings.mlxModel,
     shortcut: activeShortcut || settings.shortcut,
     autoPaste: settings.autoPaste,
+    version: app.getVersion(),
   };
 }
 

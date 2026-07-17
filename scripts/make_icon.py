@@ -41,29 +41,41 @@ def make_base():
     image = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
     bg = Image.new("RGBA", (canvas, canvas))
     pixels = bg.load()
-    start = (32, 42, 49)
-    end = (18, 26, 32)
+    start = (28, 28, 30)
+    end = (8, 8, 10)
 
+    # Graphite vertical gradient — black & white, no color.
     for y in range(canvas):
+        t = y / (canvas - 1)
+        color = tuple(mix(start[i], end[i], t) for i in range(3))
         for x in range(canvas):
-            t = (x * 0.34 + y * 0.66) / canvas
-            color = tuple(mix(start[i], end[i], t) for i in range(3))
             pixels[x, y] = (*color, 255)
 
     image.alpha_composite(bg)
-    image.putalpha(rounded_mask(canvas, 224 * scale))
 
-    # The Verse mark: a Didot closing quote in the house mint, optically centered.
+    # The Verse mark: a Didot closing quote in white, optically centered.
     ink = quote_ink()
     ink_height = round(canvas * 0.44)
     ink_width = max(1, round(ink.width * ink_height / ink.height))
     scaled = ink.resize((ink_width, ink_height), Image.Resampling.LANCZOS)
-    mark = Image.new("RGBA", scaled.size, (141, 216, 200, 255))
+    mark = Image.new("RGBA", scaled.size, (255, 255, 255, 255))
     mark.putalpha(scaled)
     image.alpha_composite(
         mark,
         ((canvas - ink_width) // 2, (canvas - ink_height) // 2),
     )
+
+    # Whisper-thin edge highlight (composited so the alpha blends).
+    border = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+    ImageDraw.Draw(border).rounded_rectangle(
+        (3 * scale, 3 * scale, canvas - 4 * scale, canvas - 4 * scale),
+        radius=224 * scale,
+        outline=(255, 255, 255, 45),
+        width=4 * scale,
+    )
+    image.alpha_composite(border)
+
+    image.putalpha(rounded_mask(canvas, 224 * scale))
 
     image = image.resize((size, size), Image.Resampling.LANCZOS)
     BUILD.mkdir(exist_ok=True)

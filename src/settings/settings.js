@@ -49,6 +49,9 @@ function applySettings(settings) {
     : "No key saved yet.";
   if (settings.shortcut) shortcutButton.textContent = shortcutLabel(settings.shortcut);
   autoPasteToggle.checked = Boolean(settings.autoPaste);
+  if (settings.version) {
+    document.querySelector("#versionText").textContent = settings.version;
+  }
 }
 
 function renderLocalEngineStatus(status) {
