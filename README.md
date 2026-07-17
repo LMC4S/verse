@@ -57,6 +57,15 @@ npm run dist
 
 Settings and transcript history are stored in Electron's user data directory (`~/Library/Application Support/Verse`).
 
+## Compared with macOS dictation
+
+macOS has built-in dictation (the 🎤 / F5 key) that types at the cursor and runs on-device on Apple Silicon. For a quick sentence of clear English it is fast and accurate. Verse covers different ground:
+
+- Whisper holds up on accents, background noise, technical vocabulary, and about 100 languages (Apple's dictation supports roughly 30 locales).
+- A choice of engine — OpenAI's API or a fully offline local model — and the model itself is swappable.
+- Every transcript is kept: searchable history with word, duration, and cost totals, one click to copy again.
+- A visible recording panel with cancel, a shortcut of your choosing, and the same behavior in every app.
+
 ## Privacy
 
 Verse has no telemetry or accounts; the DMG is a packaged build of this repository. Audio is recorded only while a recording is active. The Local MLX engine runs entirely on-device; the OpenAI engine sends audio to OpenAI for transcription. Settings and history are plain JSON files in the user data folder.
