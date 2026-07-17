@@ -14,9 +14,9 @@ The menu bar mark — a Didot closing quote — shows the current state: **”**
 
 ## Download
 
-A prebuilt `.dmg` for Apple Silicon is on the [Releases page](https://github.com/LMC4S/macOS-whisper/releases).
+Grab `Verse-x.y.z-arm64.dmg` (Apple Silicon) from the [Releases page](https://github.com/LMC4S/macOS-whisper/releases).
 
-The app is not signed or notarized, so on first launch right-click the app and choose Open, or allow it under System Settings > Privacy & Security.
+The app is not signed or notarized, so on first launch right-click the app and choose Open, or allow it under System Settings > Privacy & Security. On first use, macOS will also ask for Microphone access, and for Accessibility if auto-paste is on.
 
 ## Transcription engines
 

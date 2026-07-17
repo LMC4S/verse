@@ -1,7 +1,7 @@
 {
   "name": "verse",
   "productName": "Verse",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Speak. It becomes Verse. A menu bar voice transcription app for macOS.",
   "license": "AGPL-3.0-only",
   "main": "src/main.js",
