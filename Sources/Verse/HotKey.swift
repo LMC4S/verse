@@ -1,3 +1,4 @@
+import AppKit
 import Carbon.HIToolbox
 import Foundation
 
@@ -83,35 +84,53 @@ enum Accelerator {
             .replacingOccurrences(of: "+", with: "")
     }
 
+    /// Builds an Electron-format accelerator from a key event, for the
+    /// shortcut recorder in Settings. Returns nil for unusable combos
+    /// (plain letters without a modifier, unknown keys).
+    static func string(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> String? {
+        guard let name = keyName(for: Int(keyCode)) else { return nil }
+        var parts: [String] = []
+        if flags.contains(.control) { parts.append("Control") }
+        if flags.contains(.option) { parts.append("Alt") }
+        if flags.contains(.shift) { parts.append("Shift") }
+        if flags.contains(.command) { parts.append("Command") }
+
+        let isFunctionKey = name.hasPrefix("F") && name.count > 1
+        if parts.isEmpty && !isFunctionKey { return nil }
+        parts.append(name)
+        return parts.joined(separator: "+")
+    }
+
+    private static let namedKeys: [String: Int] = [
+        "F1": kVK_F1, "F2": kVK_F2, "F3": kVK_F3, "F4": kVK_F4,
+        "F5": kVK_F5, "F6": kVK_F6, "F7": kVK_F7, "F8": kVK_F8,
+        "F9": kVK_F9, "F10": kVK_F10, "F11": kVK_F11, "F12": kVK_F12,
+        "Space": kVK_Space, "Escape": kVK_Escape, "Return": kVK_Return,
+        "A": kVK_ANSI_A, "B": kVK_ANSI_B, "C": kVK_ANSI_C, "D": kVK_ANSI_D,
+        "E": kVK_ANSI_E, "F": kVK_ANSI_F, "G": kVK_ANSI_G, "H": kVK_ANSI_H,
+        "I": kVK_ANSI_I, "J": kVK_ANSI_J, "K": kVK_ANSI_K, "L": kVK_ANSI_L,
+        "M": kVK_ANSI_M, "N": kVK_ANSI_N, "O": kVK_ANSI_O, "P": kVK_ANSI_P,
+        "Q": kVK_ANSI_Q, "R": kVK_ANSI_R, "S": kVK_ANSI_S, "T": kVK_ANSI_T,
+        "U": kVK_ANSI_U, "V": kVK_ANSI_V, "W": kVK_ANSI_W, "X": kVK_ANSI_X,
+        "Y": kVK_ANSI_Y, "Z": kVK_ANSI_Z,
+        "0": kVK_ANSI_0, "1": kVK_ANSI_1, "2": kVK_ANSI_2, "3": kVK_ANSI_3,
+        "4": kVK_ANSI_4, "5": kVK_ANSI_5, "6": kVK_ANSI_6, "7": kVK_ANSI_7,
+        "8": kVK_ANSI_8, "9": kVK_ANSI_9,
+    ]
+
+    private static func keyName(for keyCode: Int) -> String? {
+        namedKeys.first { $0.value == keyCode }?.key
+    }
+
     private static func keyCode(for key: String) -> UInt32? {
-        let functionKeys: [String: Int] = [
-            "F1": kVK_F1, "F2": kVK_F2, "F3": kVK_F3, "F4": kVK_F4,
-            "F5": kVK_F5, "F6": kVK_F6, "F7": kVK_F7, "F8": kVK_F8,
-            "F9": kVK_F9, "F10": kVK_F10, "F11": kVK_F11, "F12": kVK_F12,
-        ]
-        if let code = functionKeys[key.uppercased()] { return UInt32(code) }
+        let normalized: String
         switch key.lowercased() {
-        case "space": return UInt32(kVK_Space)
-        case "escape", "esc": return UInt32(kVK_Escape)
-        case "return", "enter": return UInt32(kVK_Return)
-        default: break
+        case "space": normalized = "Space"
+        case "escape", "esc": normalized = "Escape"
+        case "return", "enter": normalized = "Return"
+        default: normalized = key.uppercased()
         }
-        // Single letters/digits via their ANSI key codes.
-        let ansi: [Character: Int] = [
-            "a": kVK_ANSI_A, "b": kVK_ANSI_B, "c": kVK_ANSI_C, "d": kVK_ANSI_D,
-            "e": kVK_ANSI_E, "f": kVK_ANSI_F, "g": kVK_ANSI_G, "h": kVK_ANSI_H,
-            "i": kVK_ANSI_I, "j": kVK_ANSI_J, "k": kVK_ANSI_K, "l": kVK_ANSI_L,
-            "m": kVK_ANSI_M, "n": kVK_ANSI_N, "o": kVK_ANSI_O, "p": kVK_ANSI_P,
-            "q": kVK_ANSI_Q, "r": kVK_ANSI_R, "s": kVK_ANSI_S, "t": kVK_ANSI_T,
-            "u": kVK_ANSI_U, "v": kVK_ANSI_V, "w": kVK_ANSI_W, "x": kVK_ANSI_X,
-            "y": kVK_ANSI_Y, "z": kVK_ANSI_Z,
-            "0": kVK_ANSI_0, "1": kVK_ANSI_1, "2": kVK_ANSI_2, "3": kVK_ANSI_3,
-            "4": kVK_ANSI_4, "5": kVK_ANSI_5, "6": kVK_ANSI_6, "7": kVK_ANSI_7,
-            "8": kVK_ANSI_8, "9": kVK_ANSI_9,
-        ]
-        if key.count == 1, let code = ansi[Character(key.lowercased())] {
-            return UInt32(code)
-        }
-        return nil
+        guard let code = namedKeys[normalized] else { return nil }
+        return UInt32(code)
     }
 }

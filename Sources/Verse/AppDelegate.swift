@@ -25,9 +25,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var panel: NSPanel!
     private var meterTimer: Timer?
+    private var toggleHotKeyID: UInt32?
     private var escapeHotKeyID: UInt32?
     private var hideWorkItem: DispatchWorkItem?
     private var activeShortcut = ""
+
+    private var settingsWindow: NSWindow?
+    private var historyWindow: NSWindow?
+    private lazy var settingsModel = SettingsModel()
+    private lazy var historyModel = HistoryModel()
 
     // VERSE_DEMO=1 shows the recording panel with synthetic levels — used to
     // preview the Liquid Glass UI without touching the microphone.
@@ -112,6 +118,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(history)
         menu.addItem(.separator())
 
+        let settings = NSMenuItem(
+            title: "Settings…", action: #selector(openSettings), keyEquivalent: ","
+        )
+        settings.target = self
+        menu.addItem(settings)
+        menu.addItem(.separator())
+
         menu.addItem(NSMenuItem(
             title: "Quit Verse", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"
         ))
@@ -125,8 +138,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openHistory() {
-        // Settings/History windows are ported later; open the shared JSON for now.
-        NSWorkspace.shared.open(History.fileURL)
+        if historyWindow == nil {
+            historyModel.reload()
+            historyWindow = makeWindow(
+                title: "Verse History",
+                size: NSSize(width: 520, height: 640),
+                resizable: true,
+                view: HistoryView(model: historyModel)
+            )
+        }
+        presentWindow(historyWindow)
+    }
+
+    @objc private func openSettings() {
+        if settingsWindow == nil {
+            settingsModel.applyShortcut = { [weak self] accelerator in
+                self?.applyShortcut(accelerator) ?? false
+            }
+            settingsWindow = makeWindow(
+                title: "Verse Settings",
+                size: NSSize(width: 440, height: 520),
+                resizable: false,
+                view: SettingsView(model: settingsModel)
+            )
+        }
+        presentWindow(settingsWindow)
+    }
+
+    private func makeWindow(
+        title: String, size: NSSize, resizable: Bool, view: some View
+    ) -> NSWindow {
+        var style: NSWindow.StyleMask = [.titled, .closable, .fullSizeContentView]
+        if resizable { style.insert(.resizable) }
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: style,
+            backing: .buffered,
+            defer: false
+        )
+        window.title = title
+        window.titlebarAppearsTransparent = true
+        window.isReleasedWhenClosed = false
+        window.isMovableByWindowBackground = true
+
+        let effect = NSVisualEffectView()
+        effect.material = .underWindowBackground
+        effect.blendingMode = .behindWindow
+        effect.state = .active
+
+        let hosting = NSHostingView(rootView: AnyView(view.ignoresSafeArea()))
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        effect.addSubview(hosting)
+        NSLayoutConstraint.activate([
+            hosting.topAnchor.constraint(equalTo: effect.topAnchor),
+            hosting.bottomAnchor.constraint(equalTo: effect.bottomAnchor),
+            hosting.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
+            hosting.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
+        ])
+        window.contentView = effect
+        window.center()
+        return window
+    }
+
+    private func presentWindow(_ window: NSWindow?) {
+        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
     }
 
     // MARK: - Panel
@@ -264,15 +340,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         defer { try? FileManager.default.removeItem(at: url) }
         let settings = AppSettings.load()
         do {
-            let text = try await Transcriber
-                .transcribe(fileURL: url, apiKey: settings.apiKey)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let raw: String = settings.engine == "mlx"
+                ? try await MLX.transcribe(fileURL: url, model: settings.mlxModel)
+                : try await Transcriber.transcribe(fileURL: url, apiKey: settings.apiKey)
+            let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else {
                 throw TranscriberError.badResponse("The transcript came back empty.")
             }
 
             Paste.copyToClipboard(text)
-            History.append(text: text, engine: "openai", durationMs: durationMs)
+            History.append(text: text, engine: settings.engine, durationMs: durationMs)
 
             var pasted = false
             if settings.autoPaste {
@@ -346,12 +423,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ) { [weak self] in
                 self?.toggleRecording()
             }
-            if registered != nil {
+            if let registered {
+                toggleHotKeyID = registered
                 activeShortcut = candidate
                 panelState.shortcutLabel = Accelerator.label(candidate)
                 return
             }
         }
+    }
+
+    /// Swaps the global hotkey from Settings; restores the old one on failure.
+    func applyShortcut(_ accelerator: String) -> Bool {
+        guard let (keyCode, modifiers) = Accelerator.parse(accelerator) else { return false }
+        if let id = toggleHotKeyID { HotKeyCenter.shared.unregister(id) }
+        toggleHotKeyID = nil
+
+        let registered = HotKeyCenter.shared.register(
+            keyCode: keyCode, modifiers: modifiers
+        ) { [weak self] in
+            self?.toggleRecording()
+        }
+        if let registered {
+            toggleHotKeyID = registered
+            activeShortcut = accelerator
+            panelState.shortcutLabel = Accelerator.label(accelerator)
+            AppSettings.save(["shortcut": accelerator])
+            rebuildMenu()
+            return true
+        }
+        registerToggleShortcut()
+        rebuildMenu()
+        return false
     }
 
     private func registerEscapeHotKey() {

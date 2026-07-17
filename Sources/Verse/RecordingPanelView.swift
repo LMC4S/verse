@@ -68,7 +68,7 @@ struct RecordingPanelView: View {
             }
         }
         .frame(width: Self.size.width, height: Self.size.height)
-        .glassEffect(.regular, in: .rect(cornerRadius: 26))
+        .glassEffect(.clear.interactive(), in: .rect(cornerRadius: 26))
     }
 
     private var recording: some View {

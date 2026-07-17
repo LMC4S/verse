@@ -21,6 +21,7 @@ cp Support/Info.plist "$APP/Contents/Info.plist"
 if [[ -f build/icon.icns ]]; then
   cp build/icon.icns "$APP/Contents/Resources/icon.icns"
 fi
+cp Support/local_mlx_transcribe.py "$APP/Contents/Resources/"
 
 codesign --force --sign - "$APP"
 echo "✓ Built $APP"
