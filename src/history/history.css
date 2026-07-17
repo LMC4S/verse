@@ -12,7 +12,7 @@
   --field-bg: rgba(0, 0, 0, 0.05);
   --field-border: rgba(0, 0, 0, 0.12);
   --row-hover: rgba(0, 0, 0, 0.05);
-  --accent: #0a84ff;
+  --accent: #5a5a60;
   --danger: #ff3b30;
 }
 
@@ -25,6 +25,7 @@
     --field-border: rgba(255, 255, 255, 0.14);
     --row-hover: rgba(255, 255, 255, 0.07);
     --danger: #ff453a;
+    --accent: #d8d8dc;
   }
 }
 

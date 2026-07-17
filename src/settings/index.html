@@ -6,18 +6,15 @@
     <link rel="stylesheet" href="settings.css" />
   </head>
   <body>
-    <header class="titlebar">Verse</header>
+    <header class="titlebar">Settings</header>
     <main class="content">
       <section class="group">
-        <h2>Shortcut</h2>
+        <h2>Recording</h2>
         <div class="row">
-          <span class="label">Start / stop recording</span>
+          <span class="label">Start / stop shortcut</span>
           <button id="shortcutButton" class="shortcut" type="button">⌥Space</button>
         </div>
-        <p class="hint">
-          Click, then press the keys you want — a function key alone (like F5) or any combo with
-          ⌘⌥⌃⇧. Esc cancels. Press once to record, again to transcribe.
-        </p>
+        <p class="hint">Click, then press the keys you want. Esc cancels a recording.</p>
         <div class="row">
           <span class="label">
             Use the
@@ -44,10 +41,11 @@
           <span class="label">Paste into the active app when done</span>
           <input id="autoPasteToggle" type="checkbox" />
         </div>
-        <p class="hint">
-          The transcript is always copied to the clipboard. With this on, it is also typed into
-          whatever text box has focus (needs Accessibility permission the first time).
-        </p>
+        <div class="row">
+          <span class="label">Notify when the transcript is ready</span>
+          <input id="notifyToggle" type="checkbox" />
+        </div>
+        <p class="hint">The transcript is always copied to the clipboard.</p>
       </section>
 
       <section class="group">
@@ -60,32 +58,32 @@
             <option value="apple">Apple Speech</option>
           </select>
         </div>
-        <div class="row" id="mlxModelRow">
-          <span class="label">MLX model</span>
-          <input id="mlxModelInput" type="text" spellcheck="false" />
-        </div>
-        <div class="row actions">
-          <button id="saveEngineButton" type="button">Save</button>
-        </div>
-      </section>
 
-      <section class="group">
-        <h2>OpenAI API Key</h2>
-        <div class="row">
-          <input id="apiKeyInput" type="password" placeholder="sk-…" spellcheck="false" />
-          <button id="saveApiKeyButton" type="button">Save</button>
+        <div id="openaiSection">
+          <div class="row">
+            <input id="apiKeyInput" type="password" placeholder="OpenAI API key (sk-…)" spellcheck="false" />
+            <button id="saveApiKeyButton" type="button">Save</button>
+          </div>
+          <p class="hint" id="apiKeyStatus"></p>
         </div>
-        <p class="hint" id="apiKeyStatus"></p>
-      </section>
 
-      <section class="group">
-        <h2>Local MLX Engine</h2>
-        <p class="hint" id="localEngineText">Checking…</p>
-        <div class="row actions">
-          <button id="installLocalEngineButton" type="button">Install</button>
-          <button id="removeLocalEngineButton" type="button">Remove</button>
-          <button id="openLocalEngineButton" type="button">Open Folder</button>
+        <div id="mlxSection">
+          <div class="row">
+            <span class="label">Model</span>
+            <input id="mlxModelInput" type="text" spellcheck="false" />
+            <button id="saveEngineButton" type="button">Save</button>
+          </div>
+          <p class="hint" id="localEngineText">Checking…</p>
+          <div class="row actions">
+            <button id="installLocalEngineButton" type="button">Install</button>
+            <button id="removeLocalEngineButton" type="button">Remove</button>
+            <button id="openLocalEngineButton" type="button">Open Folder</button>
+          </div>
         </div>
+
+        <p class="hint" id="appleHint" hidden>
+          macOS's built-in speech models. On-device, no key, macOS 26 or later.
+        </p>
       </section>
 
       <p class="status" id="statusText"></p>

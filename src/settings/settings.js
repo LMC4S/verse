@@ -1,8 +1,11 @@
 const shortcutButton = document.querySelector("#shortcutButton");
 const micKeyToggle = document.querySelector("#micKeyToggle");
 const autoPasteToggle = document.querySelector("#autoPasteToggle");
+const notifyToggle = document.querySelector("#notifyToggle");
 const engineSelect = document.querySelector("#engineSelect");
-const mlxModelRow = document.querySelector("#mlxModelRow");
+const openaiSection = document.querySelector("#openaiSection");
+const mlxSection = document.querySelector("#mlxSection");
+const appleHint = document.querySelector("#appleHint");
 const mlxModelInput = document.querySelector("#mlxModelInput");
 const saveEngineButton = document.querySelector("#saveEngineButton");
 const apiKeyInput = document.querySelector("#apiKeyInput");
@@ -21,13 +24,14 @@ function setStatus(message) {
 }
 
 function setBusy(isBusy) {
-  for (const button of [
+  for (const control of [
+    engineSelect,
     saveEngineButton,
     saveApiKeyButton,
     installLocalEngineButton,
     openLocalEngineButton,
   ]) {
-    button.disabled = isBusy;
+    control.disabled = isBusy;
   }
   removeLocalEngineButton.disabled = isBusy || !localEngineInstalled;
 }
@@ -41,13 +45,14 @@ function shortcutLabel(accelerator) {
     .replaceAll("+", "");
 }
 
+function cleanErrorMessage(error) {
+  return String(error?.message || error).replace(
+    /^Error invoking remote method '[^']+': (Error: )?/u,
+    ""
+  );
+}
+
 function applySettings(settings) {
-  engineSelect.value = settings.engine || "openai";
-  mlxModelInput.value = settings.mlxModel || "";
-  mlxModelRow.style.display = engineSelect.value === "mlx" ? "" : "none";
-  apiKeyStatus.textContent = settings.hasApiKey
-    ? "A key is saved. Enter a new one to replace it."
-    : "No key saved yet.";
   if (settings.shortcut) {
     shortcutButton.textContent =
       settings.micKeyEnabled && settings.shortcut === "F13"
@@ -56,6 +61,17 @@ function applySettings(settings) {
   }
   micKeyToggle.checked = Boolean(settings.micKeyEnabled);
   autoPasteToggle.checked = Boolean(settings.autoPaste);
+  notifyToggle.checked = settings.notifications !== false;
+
+  engineSelect.value = settings.engine || "openai";
+  mlxModelInput.value = settings.mlxModel || "";
+  openaiSection.hidden = engineSelect.value !== "openai";
+  mlxSection.hidden = engineSelect.value !== "mlx";
+  appleHint.hidden = engineSelect.value !== "apple";
+  apiKeyStatus.textContent = settings.hasApiKey
+    ? "A key is saved. Enter a new one to replace it."
+    : "No key saved yet.";
+
   if (settings.version) {
     document.querySelector("#versionText").textContent = settings.version;
   }
@@ -71,7 +87,7 @@ async function refreshLocalEngineStatus() {
   try {
     renderLocalEngineStatus(await window.verse.getLocalEngineStatus());
   } catch (error) {
-    localEngineText.textContent = error.message;
+    localEngineText.textContent = cleanErrorMessage(error);
   }
 }
 
@@ -81,13 +97,9 @@ async function load() {
     await refreshLocalEngineStatus();
     setStatus("");
   } catch (error) {
-    setStatus(error.message);
+    setStatus(cleanErrorMessage(error));
   }
 }
-
-engineSelect.addEventListener("change", () => {
-  mlxModelRow.style.display = engineSelect.value === "mlx" ? "" : "none";
-});
 
 // --- Shortcut recorder ---
 
@@ -183,11 +195,13 @@ window.addEventListener(
       setStatus(`Shortcut set to ${shortcutLabel(settings.shortcut)}.`);
     } catch (error) {
       stopCapturing(shortcutButton.dataset.previous);
-      setStatus(error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/u, ""));
+      setStatus(cleanErrorMessage(error));
     }
   },
   true
 );
+
+// --- Toggles ---
 
 micKeyToggle.addEventListener("change", async () => {
   micKeyToggle.disabled = true;
@@ -201,7 +215,7 @@ micKeyToggle.addEventListener("change", async () => {
     );
   } catch (error) {
     micKeyToggle.checked = !micKeyToggle.checked;
-    setStatus(error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/u, ""));
+    setStatus(cleanErrorMessage(error));
   } finally {
     micKeyToggle.disabled = false;
   }
@@ -213,11 +227,23 @@ autoPasteToggle.addEventListener("change", async () => {
     applySettings(settings);
     setStatus(settings.autoPaste ? "Auto-paste on." : "Auto-paste off — clipboard only.");
   } catch (error) {
-    setStatus(error.message);
+    setStatus(cleanErrorMessage(error));
   }
 });
 
-saveEngineButton.addEventListener("click", async () => {
+notifyToggle.addEventListener("change", async () => {
+  try {
+    const settings = await window.verse.saveNotifications(notifyToggle.checked);
+    applySettings(settings);
+    setStatus(settings.notifications ? "Notifications on." : "Notifications off.");
+  } catch (error) {
+    setStatus(cleanErrorMessage(error));
+  }
+});
+
+// --- Transcription ---
+
+engineSelect.addEventListener("change", async () => {
   setBusy(true);
   try {
     const settings = await window.verse.saveTranscriptionSettings({
@@ -229,11 +255,27 @@ saveEngineButton.addEventListener("click", async () => {
       settings.engine === "mlx"
         ? "Local MLX enabled."
         : settings.engine === "apple"
-          ? "Apple Speech enabled — on-device, macOS 26+."
+          ? "Apple Speech enabled."
           : "OpenAI API enabled."
     );
   } catch (error) {
-    setStatus(error.message);
+    setStatus(cleanErrorMessage(error));
+  } finally {
+    setBusy(false);
+  }
+});
+
+saveEngineButton.addEventListener("click", async () => {
+  setBusy(true);
+  try {
+    const settings = await window.verse.saveTranscriptionSettings({
+      engine: engineSelect.value,
+      mlxModel: mlxModelInput.value,
+    });
+    applySettings(settings);
+    setStatus("Model saved.");
+  } catch (error) {
+    setStatus(cleanErrorMessage(error));
   } finally {
     setBusy(false);
   }
@@ -252,7 +294,7 @@ saveApiKeyButton.addEventListener("click", async () => {
     applySettings(settings);
     setStatus("API key saved.");
   } catch (error) {
-    setStatus(error.message);
+    setStatus(cleanErrorMessage(error));
   } finally {
     setBusy(false);
   }
@@ -265,7 +307,7 @@ installLocalEngineButton.addEventListener("click", async () => {
     renderLocalEngineStatus(await window.verse.installLocalEngine());
     setStatus("Local MLX installed.");
   } catch (error) {
-    setStatus(error.message);
+    setStatus(cleanErrorMessage(error));
   } finally {
     setBusy(false);
   }
@@ -277,7 +319,7 @@ removeLocalEngineButton.addEventListener("click", async () => {
     renderLocalEngineStatus(await window.verse.removeLocalEngine());
     setStatus("Local MLX removed.");
   } catch (error) {
-    setStatus(error.message);
+    setStatus(cleanErrorMessage(error));
   } finally {
     setBusy(false);
   }
@@ -287,7 +329,7 @@ openLocalEngineButton.addEventListener("click", async () => {
   try {
     await window.verse.openLocalEngineFolder();
   } catch (error) {
-    setStatus(error.message);
+    setStatus(cleanErrorMessage(error));
   }
 });
 

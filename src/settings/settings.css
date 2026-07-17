@@ -13,7 +13,7 @@
   --field-border: rgba(0, 0, 0, 0.12);
   --button-bg: rgba(0, 0, 0, 0.06);
   --button-hover: rgba(0, 0, 0, 0.11);
-  --accent: #0a84ff;
+  --accent: #5a5a60;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +25,7 @@
     --field-border: rgba(255, 255, 255, 0.14);
     --button-bg: rgba(255, 255, 255, 0.09);
     --button-hover: rgba(255, 255, 255, 0.16);
+    --accent: #d8d8dc;
   }
 }
 

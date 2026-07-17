@@ -137,6 +137,7 @@ async function loadSettings() {
       mlxModel: settings.mlxModel || DEFAULT_MLX_MODEL,
       shortcut: settings.shortcut || DEFAULT_SHORTCUT,
       autoPaste: settings.autoPaste !== false,
+      notifications: settings.notifications !== false,
     };
   } catch {
     return {
@@ -146,6 +147,7 @@ async function loadSettings() {
       mlxModel: DEFAULT_MLX_MODEL,
       shortcut: DEFAULT_SHORTCUT,
       autoPaste: true,
+      notifications: true,
     };
   }
 }
@@ -420,6 +422,7 @@ function publicSettings(settings) {
     mlxModel: settings.mlxModel,
     shortcut: activeShortcut || settings.shortcut,
     autoPaste: settings.autoPaste,
+    notifications: settings.notifications,
     micKeyEnabled: micKeyEnabled(),
     version: app.getVersion(),
   };
@@ -729,8 +732,10 @@ function sendPanel(channel, payload) {
   }
 }
 
-function notify(title, body) {
+async function notify(title, body) {
   if (!Notification.isSupported()) return;
+  const settings = await loadSettings();
+  if (settings.notifications === false) return;
   new Notification({ title, body: String(body || ""), silent: false }).show();
 }
 
@@ -896,6 +901,11 @@ ipcMain.handle("micKey:set", async (_event, enabled) => {
 
 ipcMain.handle("settings:saveAutoPaste", async (_event, enabled) => {
   const settings = await saveSettings({ autoPaste: Boolean(enabled) });
+  return publicSettings(settings);
+});
+
+ipcMain.handle("settings:saveNotifications", async (_event, enabled) => {
+  const settings = await saveSettings({ notifications: Boolean(enabled) });
   return publicSettings(settings);
 });
 
