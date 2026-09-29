@@ -18,7 +18,13 @@ brew install --cask lmc4s/tap/verse
 
 Or grab `Verse-x.y.z-arm64.dmg` (Apple Silicon) from the [Releases page](https://github.com/LMC4S/verse/releases).
 
-The app is not signed or notarized, so on first launch right-click the app and choose Open, or allow it under System Settings > Privacy & Security. On first use, macOS will also ask for Microphone access, and for Accessibility if auto-paste is on.
+The app is not notarized, and macOS reports downloaded un-notarized apps as "damaged". The Homebrew cask takes care of this. If you installed from the DMG, run this once:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Verse.app
+```
+
+On first use, macOS will also ask for Microphone access, and for Accessibility if auto-paste is on.
 
 ## Transcription engines
 
